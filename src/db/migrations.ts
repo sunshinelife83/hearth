@@ -47,6 +47,11 @@ const migrations: Migration[] = [
     name: "device-tokens",
     up: migrateDeviceTokens,
   },
+  {
+    version: 9,
+    name: "task-runtime",
+    up: migrateTaskRuntime,
+  },
 ];
 
 export function migrateDatabase(sqlite: Database.Database): void {
@@ -257,6 +262,28 @@ function migrateDeviceTokens(sqlite: Database.Database): void {
       created_at text not null,
       last_used_at text
     );
+  `);
+}
+
+function migrateTaskRuntime(sqlite: Database.Database): void {
+  sqlite.exec(`
+    create table if not exists tasks (
+      id text primary key,
+      workspace_id text,
+      workspace_root text not null,
+      goal text not null,
+      status text not null,
+      completion_state text,
+      mode text not null,
+      plan text,
+      evidence text,
+      error text,
+      tool_calls integer not null default 0,
+      created_at text not null,
+      updated_at text not null
+    );
+    create index if not exists tasks_workspace_idx on tasks(workspace_id, updated_at desc);
+    create index if not exists tasks_status_idx on tasks(status, updated_at desc);
   `);
 }
 

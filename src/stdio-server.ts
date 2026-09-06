@@ -9,6 +9,7 @@ import { getLocalAgentProviderAvailabilitySnapshot } from "./local-agent-availab
 import { createWorkspaceStore } from "./workspace-store.js";
 import { WorkspaceRegistry } from "./workspaces.js";
 import { createMcpServer, type CreateServerOptions } from "./server.js";
+import { TaskStore } from "./task-store.js";
 import type { ServerConfig } from "./config.js";
 
 /**
@@ -31,6 +32,8 @@ export function buildLocalMcpServer(
 ): LocalMcpServer {
   const workspaceStore = createWorkspaceStore(config.stateDir);
   const workspaces = new WorkspaceRegistry(config, workspaceStore);
+  const taskStore = new TaskStore(config.stateDir);
+  taskStore.reconcileOnBoot();
   const reviewCheckpoints = createReviewCheckpointManager();
   const processSessions = new ProcessSessionManager({
     environment: {
@@ -49,6 +52,8 @@ export function buildLocalMcpServer(
     processSessions,
     resolveLocalAgentProviders,
     options.incomingArtifactAdapters ?? [],
+    undefined,
+    taskStore,
   );
 
   return {
@@ -57,6 +62,7 @@ export function buildLocalMcpServer(
     close: async () => {
       processSessions.shutdown();
       workspaceStore.close?.();
+      taskStore.close();
     },
   };
 }

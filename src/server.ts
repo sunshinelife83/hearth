@@ -22,6 +22,8 @@ import {
   registerArtifactTools,
 } from "./artifact-tools.js";
 import { registerAgentTools } from "./agent-tools.js";
+import { registerTaskTools } from "./task-tools.js";
+import { TaskStore } from "./task-store.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import {
   createOpenAIIncomingArtifactAdapter,
@@ -337,6 +339,7 @@ export function createMcpServer(
   resolveLocalAgentProviders: () => LocalAgentProviderStatus[],
   incomingArtifactAdapters: readonly IncomingArtifactAdapter[],
   trackToolActivity?: TrackToolActivity,
+  taskStore?: TaskStore,
 ): McpServer {
   const toolSurface = getToolSurface(config.toolMode);
   const server = new McpServer(
@@ -355,6 +358,7 @@ export function createMcpServer(
     resolveLocalAgentProviders,
     incomingArtifactAdapters,
     trackToolActivity,
+    taskStore,
   );
   return server;
 }
@@ -368,6 +372,7 @@ function registerMcpSurface(
   resolveLocalAgentProviders: () => LocalAgentProviderStatus[],
   incomingArtifactAdapters: readonly IncomingArtifactAdapter[],
   trackToolActivity?: TrackToolActivity,
+  taskStore?: TaskStore,
 ): void {
   const registrationTarget = trackToolActivity
     ? withTrackedToolHandlers(server, trackToolActivity)
@@ -766,6 +771,10 @@ function registerMcpSurface(
 
   registerAgentTools(registrationTarget, { config, workspaces });
 
+  if (taskStore) {
+    registerTaskTools(registrationTarget, { config, workspaces, processSessions, taskStore });
+  }
+
   if (config.artifactsEnabled && isArtifactDownloadSupportedPlatform()) {
     registerArtifactTools(registrationTarget, {
       config,
@@ -979,6 +988,8 @@ export function createServer(
   });
   const workspaceStore = createWorkspaceStore(config.stateDir);
   const workspaces = new WorkspaceRegistry(config, workspaceStore);
+  const taskStore = new TaskStore(config.stateDir);
+  taskStore.reconcileOnBoot();
   const reviewCheckpoints = createReviewCheckpointManager();
   const processSessions = new ProcessSessionManager({
     environment: {
@@ -1006,6 +1017,7 @@ export function createServer(
       resolveLocalAgentProviders,
       incomingArtifactAdapters,
       toolActivities.track,
+      taskStore,
     );
   });
   const logMcpHandlerError = (error: Error) => logEvent(
@@ -1154,6 +1166,7 @@ export function createServer(
         processSessions.shutdown();
         oauthProvider.close();
         workspaceStore.close?.();
+        taskStore.close();
       })();
       return closePromise;
     },
