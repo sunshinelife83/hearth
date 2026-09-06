@@ -55,6 +55,7 @@ import { shutdownHttpServer } from "./server-shutdown.js";
 
 type Command =
   | "serve"
+  | "mcp"
   | "init"
   | "doctor"
   | "config"
@@ -76,6 +77,9 @@ async function main(argv: string[]): Promise<void> {
     case "serve":
       await ensureConfigured();
       await serve();
+      return;
+    case "mcp":
+      await runMcp();
       return;
     case "init":
       await runInit({ force: args.includes("--force") });
@@ -105,6 +109,7 @@ function normalizeCommand(command: string | undefined): Command {
   if (!command || command === "serve" || command === "start") return "serve";
   if (
     command === "init"
+    || command === "mcp"
     || command === "doctor"
     || command === "config"
     || command === "agents"
@@ -296,6 +301,23 @@ async function runInit({ force }: { force: boolean }): Promise<void> {
     }
     throw error;
   }
+}
+
+async function runMcp(): Promise<void> {
+  const files = loadDevspaceFiles();
+  if (!files.configExists || (!files.authExists && !process.env.DEVSPACE_OAUTH_OWNER_TOKEN)) {
+    throw new Error(
+      [
+        "DevSpace is not configured.",
+        "",
+        "Run `devspace init` once, then point your local MCP client at:",
+        "  devspace mcp",
+      ].join("\n"),
+    );
+  }
+  const { loadConfig } = await import("./config.js");
+  const { runStdioServer } = await import("./stdio-server.js");
+  await runStdioServer(loadConfig());
 }
 
 async function serve(): Promise<void> {

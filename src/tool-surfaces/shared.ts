@@ -66,14 +66,10 @@ export function enforceShellPolicy(
     denial: {
       content: [{ type: "text", text: decision.reason }],
       isError: true,
+      // Structured content must match the tool's declared output schema
+      // (resultOutputSchema); tier/rule details live in the audit log.
       structuredContent: {
         result: decision.reason,
-        policy: {
-          decision: decision.decision,
-          tier: classification.tier as CommandTier,
-          rules: classification.rules,
-          mode: config.execution.mode,
-        },
       },
     },
   };
