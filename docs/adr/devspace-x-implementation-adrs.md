@@ -69,3 +69,32 @@
 | P3 Task state machine كاملة + Verification gates | جزئي (Snapshots جاهزة كأساس) |
 | P4 sandbox adapters (bwrap/seatbelt) + probing | قادمة |
 | P6 Context Engine | قادمة |
+
+---
+
+## ADR-020: نقل MCP محلي عبر stdio + توكنات الأجهزة
+- **Status:** accepted (2026-09-06، المرحلة الثانية)
+- **Decision:** أمر `devspace mcp` يشغّل نفس سطح الأدوات عبر StdioServerTransport — بلا HTTP ولا OAuth (العميل عملية أطلقها المستخدم بنفسه). نفس النواة: policy gate، workspaces، snapshots، agent tools، task tools — بالبناء المشترك `buildLocalMcpServer`.
+- **device tokens:** للعملاء المحليين عبر HTTP/LAN الذين لا يدعمون تدفق OAuth: `devspace token create/list/revoke` — توكن يُعرض مرة واحدة، يُخزَّن hashed (migration 8)، يمنح نفس صلاحية scope `devspace` ويُربط بمورد الخادم في verifyAccessToken.
+- **issuerMode:** `derived` (افتراضي، سلوك اليوم) أو `local` — يثبّت هوية OAuth على العنوان المحلي بحيث لا يكسر تغيير tunnel هوية العملاء (للنشر المحلي/LAN فقط؛ العملاء البعيدون يحتاجون derived).
+
+## ADR-021: Task Runtime — آلة حالة دائمة وبوابات تحقق غير قابلة للتحايل
+- **Status:** accepted
+- **Decision:**
+  - جدول `tasks` (migration 9) + آلة حالة محروسة: planning → executing → verifying → {completed | repairing} → …؛ انتقال غير شرعي = `TaskTransitionError`.
+  - **الإكمال حكم نظام لا ادعاء نموذج:** `task_complete` يشغّل بوابات التحقق المكتشفة (package.json/Cargo/go/pyproject/Makefile) قبل أي حالة `completed`؛ `verified_complete` فقط بعد نجاح كل البوابات؛ `model_complete` ممكنة صراحةً فقط عبر `acceptUnverified: true` عند غياب أي بوابات (مُدقَّقة كـ evidence kind=model_claim).
+  - **قاعدة مانعة للتحايل (اكتشفتها الاختبارات):** البوابة الفاشلة تبقى في مجموعة التحقق حتى تنجح — `task_complete` من حالة `repairing` يُرفض، و`task_verify` يعيد البوابات الفاشلة سابقًا دائمًا مع أي بوابات جديدة. لا يمكن "تبديل" بوابات فاشلة بأخرى أسهل.
+  - Crash recovery: عند الإقلاع، المهام in-flight (executing/verifying/repairing) تُعلَّم failed بسبب صريح — العميل يعيد إنشاءها أو استئنافها بوعي.
+  - Budget: سقف زمني للمهمة (30 دقيقة افتراضيًا) يفشل المهمة عند التجاوز.
+- **Consequences:** أدوات MCP: `task_create/task_plan/task_status/task_list/task_verify/task_complete/task_cancel`. بوابات التحقق تمر عبر نفس بوابة السياسة (readonly يمنع التحقق — موثق).
+
+## ADR-022: Sandbox adapters — best-effort بقدرات معلنة
+- **Status:** accepted
+- **Decision:** `probeSandboxAdapter` (مرة لكل عملية): bubblewrap على Linux، seatbelt (sandbox-exec) على macOS، none غير ذلك. الوصفة: bwrap = ro-bind للجذر + rw للمساحة + tmpfs لـ /tmp و/run (+ `--unshare-net` عند sandboxNetwork=deny)؛ seatbelt = ملف تعريف يمنع الكتابة خارج الـ workspace و/tmp.
+- **متى يُطبَّق:** الوضع `autonomous` فقط افتراضيًا (auto)، وأوامر التحقق ضمنه؛ `execution.requireSandboxForAutonomous: true` يحوّل غياب الـ sandbox إلى رفض لـ tier-2 في autonomous.
+- **حدود موثقة:** سطح claude `bash` ينفّذ عبر Pi SDK (لا يمر بـ ProcessSessionManager) — يخضع لبوابة السياسة وقاعدة requireSandbox (رفض) لكنه لا يُغلَّف bwrap/seatbelt حاليًا؛ Windows بلا adapter (الحاوية هي المسار الموصى به لاحقًا). profile seatbelt تقريبي وليس عزلًا صارمًا.
+
+## ADR-023: Context Engine — الشريحة الأولى (خريطة مستودع + بحث)
+- **Status:** accepted
+- **Decision:** `context_overview` (خريطة محلية حتمية: ملفات/لغات/manifests/أكبر مجلدات، مع استبعاد dependencies وحدود 5000 ملف) و`search` (ripgrep عند التوفر وإلا grep -E، argv array بلا shell، مهلة 10 ثوان، سقف إخراج 40KB، استبعاد node_modules/.git).
+- **Consequences:** لا embeddings ولا شبكة — الأساس الدلالي (ONNX محليًا) يبقى في P6 اللاحقة فوق هذه الواجهة.
