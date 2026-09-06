@@ -10,6 +10,7 @@ import {
 } from "./local-agent-errors.js";
 import { removeDevspaceNodeModulesBinFromPath } from "./local-agent-path.js";
 import { terminateProcessTree } from "./process-platform.js";
+import { devspaceVersion } from "./app-version.js";
 import type {
   LocalAgentDriver,
   LocalAgentRunCallbacks,
@@ -109,7 +110,7 @@ export class CodexAppServerRuntime implements LocalAgentRuntime {
 
   async initialize(): Promise<void> {
     await this.rpc.request("initialize", {
-      clientInfo: { name: "devspace", title: "DevSpace", version: "1.0.7" },
+      clientInfo: { name: "devspace", title: "DevSpace", version: devspaceVersion() },
       capabilities: {},
     });
     this.rpc.notify("initialized");

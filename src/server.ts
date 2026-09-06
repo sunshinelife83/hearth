@@ -32,6 +32,7 @@ import {
   requestPath,
 } from "./logger.js";
 import { readFileTool } from "./pi-tools.js";
+import { RateLimiter, createAuthRateLimiters } from "./rate-limit.js";
 import { SingleUserOAuthProvider } from "./oauth-provider.js";
 import {
   compileMcpRegistrationSurface,
@@ -41,6 +42,12 @@ import {
 } from "./mcp-modern-server.js";
 import { ProcessSessionManager } from "./process-sessions.js";
 import { createReviewCheckpointManager } from "./review-checkpoints.js";
+import {
+  createSnapshot,
+  listSnapshots,
+  rollbackSnapshot,
+} from "./snapshot-manager.js";
+import { decideExecution } from "./policy/command-policy.js";
 import { conversationScopeIdFromRequestMeta } from "./request-meta.js";
 import { shutdownHttpServer } from "./server-shutdown.js";
 import { formatPathForPrompt } from "./skills.js";
@@ -73,6 +80,7 @@ import {
 } from "./tool-surfaces/types.js";
 
 const WORKSPACE_APP_MANIFEST_ENTRY = "workspace-app.html";
+const SHUTDOWN_DRAIN_TIMEOUT_MS = 15_000;
 
 function mcpServerInfo() {
   return {
@@ -104,9 +112,25 @@ class ToolActivityTracker {
     return promise;
   };
 
-  async waitForIdle(): Promise<void> {
+  activeCount(): number {
+    return this.active.size;
+  }
+
+  async waitForIdle(timeoutMs?: number): Promise<void> {
+    if (timeoutMs === undefined) {
+      while (this.active.size > 0) {
+        await Promise.allSettled(Array.from(this.active));
+      }
+      return;
+    }
+
+    const deadline = new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, timeoutMs);
+      timer.unref();
+    });
     while (this.active.size > 0) {
-      await Promise.allSettled(Array.from(this.active));
+      await Promise.race([Promise.allSettled(Array.from(this.active)), deadline]);
+      if (this.active.size > 0) break;
     }
   }
 }
@@ -746,6 +770,156 @@ function registerMcpSurface(
       incomingArtifactAdapters,
     });
   }
+
+  registrationTarget.registerTool(
+    "create_snapshot",
+    {
+      title: "Create snapshot",
+      description:
+        "Capture a restorable snapshot of the workspace working tree (tracked and untracked files, not git-ignored ones) as a git ref. Use before risky multi-step changes so the work can be restored later.",
+      inputSchema: {
+        workspaceId: z.string().describe(workspaceIdDescription),
+        label: z
+          .string()
+          .trim()
+          .min(1)
+          .max(120)
+          .optional()
+          .describe("Short label describing the upcoming change."),
+      },
+      outputSchema: resultOutputSchema({
+        snapshotId: z.string(),
+        label: z.string(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ workspaceId, label }) => {
+      const startedAt = performance.now();
+      const workspace = workspaces.getWorkspace(workspaceId);
+      try {
+        const snapshot = await createSnapshot({
+          root: workspace.root,
+          workspaceId,
+          label: label ?? "manual",
+        });
+        const result = `Snapshot created: ${snapshot.snapshotId}`;
+        logToolCall(config, {
+          tool: "create_snapshot",
+          workspaceId,
+          success: true,
+          durationMs: Math.round(performance.now() - startedAt),
+        });
+        return {
+          content: [textBlock(result)],
+          structuredContent: { result, snapshotId: snapshot.snapshotId, label: snapshot.label },
+        };
+      } catch (error) {
+        logFailedToolResponse(config, {
+          tool: "create_snapshot",
+          workspaceId,
+        }, [textBlock(error instanceof Error ? error.message : String(error))], startedAt);
+        throw error;
+      }
+    },
+  );
+
+  registrationTarget.registerTool(
+    "list_snapshots",
+    {
+      title: "List snapshots",
+      description: "List restorable snapshots previously captured for this workspace.",
+      inputSchema: {
+        workspaceId: z.string().describe(workspaceIdDescription),
+      },
+      outputSchema: resultOutputSchema(),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ workspaceId }) => {
+      const workspace = workspaces.getWorkspace(workspaceId);
+      const records = await listSnapshots({ root: workspace.root, workspaceId });
+      const lines = records.length > 0
+        ? records.map((record) => `${record.snapshotId}  ${record.createdAt}  ${record.label}`).join("\n")
+        : "No snapshots for this workspace yet.";
+      return {
+        content: [textBlock(lines)],
+        structuredContent: {
+          result: lines,
+          snapshots: records.map((record) => ({
+            snapshotId: record.snapshotId,
+            label: record.label,
+            createdAt: record.createdAt,
+          })),
+        },
+      };
+    },
+  );
+
+  registrationTarget.registerTool(
+    "rollback_snapshot",
+    {
+      title: "Rollback to snapshot",
+      description:
+        "Restore the workspace working tree to a previously captured snapshot. Files changed since the snapshot are reverted (including deletions and creations); git-ignored files and the repository HEAD are untouched. Tier-2 policy applies like shell commands.",
+      inputSchema: {
+        workspaceId: z.string().describe(workspaceIdDescription),
+        snapshotId: z
+          .string()
+          .regex(/^[0-9a-f]{40,64}$/)
+          .describe("Snapshot ID returned by create_snapshot or list_snapshots."),
+        approvedByUser: z
+          .boolean()
+          .optional()
+          .describe(
+            "Set to true only after the user explicitly approved this rollback in the conversation. Required in supervised mode.",
+          ),
+      },
+      outputSchema: resultOutputSchema(),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ workspaceId, snapshotId, approvedByUser }) => {
+      const startedAt = performance.now();
+      const workspace = workspaces.getWorkspace(workspaceId);
+      const decision = decideExecution({
+        mode: config.execution.mode,
+        tier: 2,
+        approvedByUser,
+      });
+      logEvent(config.logging, decision.decision === "allow" ? "info" : "warn", "policy_decision", {
+        tool: "rollback_snapshot",
+        workspaceId,
+        tier: 2,
+        decision: decision.decision,
+        mode: config.execution.mode,
+        approvalClaimed: decision.approvalClaimed ?? false,
+      });
+      if (decision.decision !== "allow") {
+        return {
+          content: [textBlock(decision.reason)],
+          isError: true,
+          structuredContent: { result: decision.reason, policy: { decision: decision.decision, tier: 2 } },
+        };
+      }
+
+      const rollback = await rollbackSnapshot({
+        root: workspace.root,
+        workspaceId,
+        snapshotId,
+      });
+      const result = rollback.files > 0
+        ? `Rolled back ${rollback.files} file(s) to snapshot ${snapshotId}.`
+        : `Workspace already matches snapshot ${snapshotId}.`;
+      logToolCall(config, {
+        tool: "rollback_snapshot",
+        workspaceId,
+        success: true,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+      return {
+        content: [textBlock(result)],
+        structuredContent: { result, files: rollback.files },
+      };
+    },
+  );
 }
 
 function withTrackedToolHandlers(
@@ -785,7 +959,17 @@ export function createServer(
   });
   const mcpUrl = new URL("/mcp", config.publicBaseUrl);
   const resourceServerUrl = resourceUrlFromServerUrl(mcpUrl);
-  const oauthProvider = new SingleUserOAuthProvider(config.oauth, mcpUrl, config.stateDir);
+  const rateLimiters = createAuthRateLimiters(config.oauth.trustProxy);
+  const ownerTokenFailureLimiter = new RateLimiter({
+    keyPrefix: "owner-token-failure",
+    rule: { limit: 8, windowMs: 60 * 60 * 1000 },
+  });
+  const oauthProvider = new SingleUserOAuthProvider(
+    config.oauth,
+    mcpUrl,
+    config.stateDir,
+    ownerTokenFailureLimiter,
+  );
   const bearerAuth = requireBearerAuth({
     verifier: oauthProvider,
     requiredScopes: [config.oauth.scopes[0] ?? "devspace"],
@@ -794,7 +978,12 @@ export function createServer(
   const workspaceStore = createWorkspaceStore(config.stateDir);
   const workspaces = new WorkspaceRegistry(config, workspaceStore);
   const reviewCheckpoints = createReviewCheckpointManager();
-  const processSessions = new ProcessSessionManager();
+  const processSessions = new ProcessSessionManager({
+    environment: {
+      allowAll: config.execution.envAllowAll,
+      extraAllowlist: config.execution.envAllowlist,
+    },
+  });
   const toolActivities = new ToolActivityTracker();
   const localAgentProviders = buildLocalAgentProviderStatuses(
     config.subagents,
@@ -864,6 +1053,10 @@ export function createServer(
 
     next();
   });
+
+  app.use("/authorize", rateLimiters.authorizeIpMiddleware);
+  app.use("/register", rateLimiters.registerIpMiddleware);
+  app.use("/token", rateLimiters.tokenIpMiddleware);
 
   app.use(
     mcpAuthRouter({
@@ -950,7 +1143,12 @@ export function createServer(
             error: error instanceof Error ? error.message : String(error),
           });
         }
-        await toolActivities.waitForIdle();
+        await toolActivities.waitForIdle(SHUTDOWN_DRAIN_TIMEOUT_MS);
+        if (toolActivities.activeCount() > 0) {
+          logEvent(config.logging, "warn", "shutdown_drain_timeout", {
+            activeToolCalls: toolActivities.activeCount(),
+          });
+        }
         processSessions.shutdown();
         oauthProvider.close();
         workspaceStore.close?.();

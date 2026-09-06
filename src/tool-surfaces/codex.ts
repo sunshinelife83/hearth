@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { logEvent } from "../logger.js";
 import { applyPatch } from "../apply-patch.js";
 import type { ProcessSnapshot } from "../process-sessions.js";
 import {
@@ -10,14 +11,16 @@ import {
 } from "./types.js";
 import {
   contentText,
+  enforceShellPolicy,
   resultOutputSchema,
   runLoggedToolOperation,
+  snapshotBeforeRiskyExecution,
   textBlock,
 } from "./shared.js";
 
 type CodexRegistration = (context: ToolRegistrationContext) => void;
 
-const CODEX_INSTRUCTIONS = `Use ${toolNames.read} for direct file reads, apply_patch for all file modifications, exec_command for inspection, tests, builds, and other commands, and write_stdin to poll or interact with running processes. Commands run with the local user's authority and are not sandboxed; workspace validation only selects their initial working directory. Follow instructions returned by ${toolNames.openWorkspace}; read applicable instruction and skill files before working in their scope.`;
+const CODEX_INSTRUCTIONS = `Use ${toolNames.read} for direct file reads, apply_patch for all file modifications, exec_command for inspection, tests, builds, and other commands, and write_stdin to poll or interact with running processes. Commands run with the local user's authority and are not sandboxed; workspace validation only selects their initial working directory. Command policy: inspection commands run freely; ordinary workspace work (builds, tests, local edits) runs freely; commands with effects outside the workspace (network fetches, package installs, recursive deletes, git push, permission changes) require explicit user approval in the conversation and the approvedByUser flag; privilege escalation, system management, and piping remote scripts into a shell are always blocked. Follow instructions returned by ${toolNames.openWorkspace}; read applicable instruction and skill files before working in their scope.`;
 
 export function codexInstructions(): string {
   return CODEX_INSTRUCTIONS;
@@ -185,6 +188,12 @@ function registerCodexProcessTools(context: ToolRegistrationContext): void {
           .max(100_000)
           .optional()
           .describe("Approximate output token budget. Defaults to 10000."),
+        approvedByUser: z
+          .boolean()
+          .optional()
+          .describe(
+            "Set to true only after the user explicitly approved this exact command in the conversation. Required for tier-2 commands (network, installs, recursive deletes, pushes) unless the workspace runs in autonomous mode.",
+          ),
       },
       outputSchema: processOutputSchema(),
       annotations: SHELL_TOOL_ANNOTATIONS,
@@ -198,8 +207,20 @@ function registerCodexProcessTools(context: ToolRegistrationContext): void {
       workingDirectory,
       yieldTimeMs,
       maxOutputTokens,
+      approvedByUser,
     }) => {
       const startedAt = performance.now();
+      const verdict = enforceShellPolicy(config, { tool: "exec_command", workspaceId, command: cmd }, approvedByUser);
+      if (verdict.denial) {
+        logEvent(config.logging, "info", "tool_call", {
+          tool: "exec_command",
+          workspaceId,
+          success: false,
+          durationMs: Math.round(performance.now() - startedAt),
+          error: "policy_denied",
+        });
+        return verdict.denial;
+      }
       const snapshot = await runLoggedToolOperation(
         config,
         {
@@ -212,6 +233,7 @@ function registerCodexProcessTools(context: ToolRegistrationContext): void {
         startedAt,
         async () => {
           const workspace = workspaces.getWorkspace(workspaceId);
+          await snapshotBeforeRiskyExecution(config, workspace, cmd);
           const cwd = workspaces.resolveWorkingDirectory(
             workspace,
             workingDirectory,

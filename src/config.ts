@@ -3,10 +3,17 @@ import type { ToolMode } from "./config-schema.js";
 import { expandHomePath } from "./roots.js";
 import type { LoggingConfig } from "./logger.js";
 import type { OAuthConfig } from "./oauth-provider.js";
+import type { ExecutionMode } from "./policy/command-policy.js";
 import { devspaceAgentsDir, devspaceSkillsDir, loadDevspaceFiles } from "./user-config.js";
 import type { SubagentsConfig } from "./local-agent-config.js";
 
 export type { ToolMode } from "./config-schema.js";
+
+export interface ExecutionConfig {
+  mode: ExecutionMode;
+  envAllowAll: boolean;
+  envAllowlist: string[];
+}
 
 export interface ServerConfig {
   configDir: string;
@@ -27,6 +34,7 @@ export interface ServerConfig {
   devspaceSkillsDir: string;
   devspaceAgentsDir: string;
   subagents: SubagentsConfig;
+  execution: ExecutionConfig;
   agentDir: string;
   logging: LoggingConfig;
 }
@@ -60,6 +68,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       refreshTokenTtlSeconds: stored.oauth.refreshTokenTtlSeconds,
       scopes: stored.oauth.scopes,
       allowedRedirectHosts: stored.oauth.allowedRedirectHosts,
+      trustProxy: stored.server.trustProxy,
     },
     allowedRoots: normalizePaths(stored.workspaces.allowedRoots, [process.cwd()]),
     allowedHosts: normalizeAllowedHosts(derivedAllowedHosts),
@@ -75,6 +84,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     devspaceSkillsDir: devspaceSkillsDir(env),
     devspaceAgentsDir: devspaceAgentsDir(env),
     subagents: stored.subagents,
+    execution: {
+      mode: stored.execution.mode,
+      envAllowAll: stored.execution.envAllowAll,
+      envAllowlist: stored.execution.envAllowlist,
+    },
     agentDir: normalizePath(stored.skills.agentDir),
     logging: {
       ...stored.logging,

@@ -425,6 +425,10 @@ export function spawnLocalAgentDaemon(
     windowsHide: true,
     env: localAgentDaemonEnvironment(configDir, env),
   });
+  // The detached child is unref()d immediately; without an error listener a
+  // spawn failure (missing interpreter/entrypoint) escalates to an uncaught
+  // exception in this process instead of surfacing as a hello timeout.
+  child.on("error", () => undefined);
   child.unref();
 }
 

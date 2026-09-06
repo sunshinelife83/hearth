@@ -50,6 +50,21 @@ const loggingConfigSchema = z.object({
   shellCommands: z.boolean().default(false),
 }).strict().prefault({});
 
+const executionConfigSchema = z.object({
+  // Policy mode for model-invoked shell tools:
+  // readonly    — tier-0 inspection commands only
+  // supervised  — tier 0/1 allowed; tier 2 requires an explicit
+  //               user-approval claim (approvedByUser) from the model
+  // autonomous  — tier 0/1/2 allowed without approval claims
+  // tier 3 commands are blocked in every mode.
+  mode: z.enum(["readonly", "supervised", "autonomous"]).default("supervised"),
+  // Pass the full parent environment to model-invoked commands. Insecure
+  // escape hatch; the default is a conservative allowlist.
+  envAllowAll: z.boolean().default(false),
+  // Additional environment variable names passed to model-invoked commands.
+  envAllowlist: z.array(z.string().trim().min(1)).default([]),
+}).strict().prefault({});
+
 const oauthConfigSchema = z.object({
   accessTokenTtlSeconds: z.number().int().positive().default(60 * 60),
   refreshTokenTtlSeconds: z.number().int().positive().default(30 * 24 * 60 * 60),
@@ -72,6 +87,7 @@ export const devspaceConfigSchema = z.object({
   artifacts: artifactsConfigSchema,
   skills: skillsConfigSchema,
   subagents: subagentsConfigSchema.default({ enabled: false, providers: [] }),
+  execution: executionConfigSchema,
   logging: loggingConfigSchema,
   oauth: oauthConfigSchema,
 }).strict();

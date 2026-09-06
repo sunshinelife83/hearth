@@ -63,7 +63,8 @@ type Command =
   | "help"
   | "version";
 const require = createRequire(import.meta.url);
-const SUPPORTED_NODE_RANGE = ">=20.12 <27";
+// Keep in sync with "engines.node" in package.json and the documented range.
+const SUPPORTED_NODE_RANGE = ">=22.19 <27";
 
 async function main(argv: string[]): Promise<void> {
   assertSupportedNode();
@@ -238,8 +239,12 @@ async function runInit({ force }: { force: boolean }): Promise<void> {
       selectedProviders,
     );
 
+    // `init --force` rotates the owner password so "password not accepted"
+    // recovery never keeps a credential the user considers lost.
     const auth = {
-      ownerToken: files.auth.ownerToken ?? generateOwnerToken(),
+      ownerToken: force || !files.auth.ownerToken
+        ? generateOwnerToken()
+        : files.auth.ownerToken,
     };
 
     setDevspaceConfigValues([

@@ -16,13 +16,15 @@ import {
 import {
   contentText,
   countDiffStats,
+  enforceShellPolicy,
   logFailedToolResponse,
   logToolCall,
   resultOutputSchema,
+  snapshotBeforeRiskyExecution,
   textBlock,
 } from "./shared.js";
 
-const CLAUDE_INSTRUCTIONS = `Use ${toolNames.read} for direct file reads, ${toolNames.edit} for targeted modifications, ${toolNames.write} only for new files or complete rewrites, and ${toolNames.shell} for inspection, tests, builds, and other commands. Shell commands run with the local user's authority and are not sandboxed; workspace validation only selects their initial working directory. Follow instructions returned by ${toolNames.openWorkspace}; read applicable instruction and skill files before working in their scope.`;
+const CLAUDE_INSTRUCTIONS = `Use ${toolNames.read} for direct file reads, ${toolNames.edit} for targeted modifications, ${toolNames.write} only for new files or complete rewrites, and ${toolNames.shell} for inspection, tests, builds, and other commands. Shell commands run with the local user's authority and are not sandboxed; workspace validation only selects their initial working directory. Command policy: inspection and ordinary workspace work (builds, tests, local edits) run freely; commands with effects outside the workspace (network fetches, package installs, recursive deletes, git push, permission changes) require explicit user approval in the conversation and the approvedByUser flag; privilege escalation, system management, and piping remote scripts into a shell are always blocked. Follow instructions returned by ${toolNames.openWorkspace}; read applicable instruction and skill files before working in their scope.`;
 
 export function claudeInstructions({
   agents,
@@ -196,17 +198,40 @@ function registerShellTool(context: ToolRegistrationContext): void {
           .max(300)
           .optional()
           .describe("Timeout in seconds. Defaults to 30, max 300."),
+        approvedByUser: z
+          .boolean()
+          .optional()
+          .describe(
+            "Set to true only after the user explicitly approved this exact command in the conversation. Required for tier-2 commands (network, installs, recursive deletes, pushes) unless the workspace runs in autonomous mode.",
+          ),
       },
       outputSchema: resultOutputSchema(),
       annotations: SHELL_TOOL_ANNOTATIONS,
     },
-    async ({ workspaceId, workingDirectory, ...input }) => {
+    async ({ workspaceId, workingDirectory, approvedByUser, ...input }) => {
       const startedAt = performance.now();
       const workspace = workspaces.getWorkspace(workspaceId);
+      const verdict = enforceShellPolicy(config, { tool: toolNames.shell, workspaceId, command: input.command }, approvedByUser);
+      if (verdict.denial) {
+        logFailedToolResponse(
+          config,
+          {
+            tool: toolNames.shell,
+            workspaceId,
+            workingDirectory: workingDirectory ?? ".",
+            command: input.command,
+            commandLength: input.command.length,
+          },
+          verdict.denial.content,
+          startedAt,
+        );
+        return verdict.denial;
+      }
       const cwd = workspaces.resolveWorkingDirectory(
         workspace,
         workingDirectory,
       );
+      await snapshotBeforeRiskyExecution(config, workspace, input.command);
       const response = await runShellTool(input, {
         cwd,
         root: workspace.root,

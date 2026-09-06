@@ -256,7 +256,7 @@ function readJsonFile<T>(filePath: string, schema: z.ZodType<T>): T {
 }
 
 function writeJsonFile(filePath: string, value: unknown, mode: number): void {
-  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, { mode });
+  atomicWrite(filePath, `${JSON.stringify(value, null, 2)}\n`, mode);
 }
 
 function fileError(action: "read" | "migrate", filePath: string, error: unknown): Error {

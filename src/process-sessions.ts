@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { filterChildEnvironment, type EnvironmentFilter } from "./policy/env-allowlist.js";
 import { resolveShellCommand, terminateProcessTree } from "./process-platform.js";
 
 const DEFAULT_EXEC_YIELD_MS = 10_000;
@@ -69,6 +70,8 @@ interface ProcessSession {
 interface ProcessSessionManagerOptions {
   maxBufferCharacters?: number;
   completedSessionTtlMs?: number;
+  /** Environment filtering for child processes (policy: env allowlist). */
+  environment?: EnvironmentFilter;
 }
 
 function boundedInteger(value: number | undefined, fallback: number, maximum: number): number {
@@ -87,14 +90,15 @@ function terminalSize(value: number | undefined, fallback: number): number {
   return value;
 }
 
-function processEnvironment(input?: {
-  workspaceId?: string;
-  workspaceRoot?: string;
-}): Record<string, string> {
+function processEnvironment(
+  baseEnvironment: Record<string, string>,
+  input?: {
+    workspaceId?: string;
+    workspaceRoot?: string;
+  },
+): Record<string, string> {
   return {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-    ),
+    ...baseEnvironment,
     NO_COLOR: "1",
     TERM: "dumb",
     PAGER: "cat",
@@ -215,11 +219,13 @@ export class ProcessSessionManager {
   private readonly sessions = new Map<number, ProcessSession>();
   private readonly maxBufferCharacters: number;
   private readonly completedSessionTtlMs: number;
+  private readonly environment: EnvironmentFilter;
   private nextSessionId = 1;
 
   constructor(options: ProcessSessionManagerOptions = {}) {
     this.maxBufferCharacters = options.maxBufferCharacters ?? DEFAULT_BUFFER_CHARACTERS;
     this.completedSessionTtlMs = options.completedSessionTtlMs ?? COMPLETED_SESSION_TTL_MS;
+    this.environment = options.environment ?? { allowAll: true };
   }
 
   async start(input: StartCommandInput): Promise<ProcessSnapshot> {
@@ -327,10 +333,13 @@ export class ProcessSessionManager {
     const detached = process.platform !== "win32";
     const child = spawn(input.command, {
       cwd: input.cwd,
-      env: processEnvironment({
-        workspaceId: input.workspaceId,
-        workspaceRoot: input.workspaceRoot,
-      }),
+      env: processEnvironment(
+        filterChildEnvironment(process.env, this.environment, { workspaceId: input.workspaceId }),
+        {
+          workspaceId: input.workspaceId,
+          workspaceRoot: input.workspaceRoot,
+        },
+      ),
       stdio: "pipe",
       windowsHide: true,
       detached,
@@ -361,10 +370,13 @@ export class ProcessSessionManager {
     try {
       pty = nodePty.spawn(shell.executable, shell.args, {
         cwd: input.cwd,
-        env: processEnvironment({
-          workspaceId: input.workspaceId,
-          workspaceRoot: input.workspaceRoot,
-        }),
+        env: processEnvironment(
+          filterChildEnvironment(process.env, this.environment, { workspaceId: input.workspaceId }),
+          {
+            workspaceId: input.workspaceId,
+            workspaceRoot: input.workspaceRoot,
+          },
+        ),
         name: "xterm-256color",
         cols: session.columns,
         rows: session.rows,

@@ -1,4 +1,4 @@
-import { timingSafeEqual, randomBytes, randomUUID, createHash } from "node:crypto";
+import { timingSafeEqual, randomBytes, randomUUID, createHash, createHmac } from "node:crypto";
 import type { Response } from "express";
 import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
 import type { OAuthServerProvider, AuthorizationParams } from "@modelcontextprotocol/sdk/server/auth/provider.js";
@@ -10,6 +10,7 @@ import type {
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { checkResourceAllowed, resourceUrlFromServerUrl } from "@modelcontextprotocol/sdk/shared/auth-utils.js";
+import { requestIp } from "./logger.js";
 import { SqliteOAuthClientsStore, SqliteOAuthStore } from "./oauth-store.js";
 
 export interface OAuthConfig {
@@ -18,6 +19,8 @@ export interface OAuthConfig {
   refreshTokenTtlSeconds: number;
   scopes: string[];
   allowedRedirectHosts: string[];
+  /** Honor proxy headers (cf-connecting-ip / x-forwarded-for) for rate-limit keys. */
+  trustProxy: boolean;
 }
 
 interface AuthorizationCodeRecord {
@@ -54,13 +57,14 @@ function formHtml(params: {
   scopes: string[];
   resource?: URL;
   fields: Record<string, string | undefined>;
+  csrfToken?: string;
 }): string {
   const scopeText = params.scopes.length > 0 ? params.scopes.join(" ") : "devspace";
   const resourceText = params.resource?.href ?? "DevSpace MCP endpoint";
   const error = params.error
     ? `<p class="error">${htmlEscape(params.error)}</p>`
     : "";
-  const hiddenFields = Object.entries(params.fields)
+  const hiddenFields = Object.entries({ ...params.fields, csrf_token: params.csrfToken })
     .filter((entry): entry is [string, string] => entry[1] !== undefined)
     .map(([name, value]) => `        <input type="hidden" name="${htmlEscape(name)}" value="${htmlEscape(value)}" />`)
     .join("\n");
@@ -111,6 +115,67 @@ function requestedScopesAllowed(requested: string[], supported: string[]): boole
   return requested.every((scope) => supported.includes(scope));
 }
 
+const CONSENT_FRAME_HEADERS: Record<string, string> = {
+  "X-Frame-Options": "DENY",
+  "Content-Security-Policy": "frame-ancestors 'none'",
+};
+
+function setConsentHeaders(res: Response): void {
+  for (const [name, value] of Object.entries(CONSENT_FRAME_HEADERS)) {
+    res.setHeader(name, value);
+  }
+}
+
+function consentCsrfToken(
+  config: OAuthConfig,
+  fields: {
+    client_id?: string;
+    redirect_uri?: string;
+    code_challenge?: string;
+    scope?: string;
+    state?: string;
+    resource?: string;
+  },
+): string {
+  const key = createHash("sha256").update(`devspace-consent:${config.ownerToken}`).digest();
+  const canonical = JSON.stringify([
+    "devspace-consent-v1",
+    fields.client_id ?? "",
+    fields.redirect_uri ?? "",
+    fields.code_challenge ?? "",
+    fields.scope ?? "",
+    fields.state ?? "",
+    fields.resource ?? "",
+  ]);
+  return createHmac("sha256", key).update(canonical).digest("base64url");
+}
+
+function consentCsrfValid(
+  config: OAuthConfig,
+  body: Record<string, unknown>,
+): boolean {
+  const provided = typeof body.csrf_token === "string" ? body.csrf_token : "";
+  if (!provided) return false;
+  const expected = consentCsrfToken(config, {
+    client_id: asString(body.client_id),
+    redirect_uri: asString(body.redirect_uri),
+    code_challenge: asString(body.code_challenge),
+    scope: asString(body.scope),
+    state: asString(body.state),
+    resource: asString(body.resource),
+  });
+  return safeEquals(provided, expected);
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+export interface OwnerTokenFailureLimiter {
+  take(key: string): { allowed: boolean; retryAfterSeconds: number };
+  reset(key: string): void;
+}
+
 export class SingleUserOAuthProvider implements OAuthServerProvider {
   readonly clientsStore: OAuthRegisteredClientsStore;
   private readonly codes = new Map<string, AuthorizationCodeRecord>();
@@ -121,6 +186,7 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
     private readonly config: OAuthConfig,
     resourceServerUrl: URL,
     stateDir: string,
+    private readonly ownerTokenFailureLimiter?: OwnerTokenFailureLimiter,
   ) {
     this.resourceServerUrl = resourceUrlFromServerUrl(resourceServerUrl);
     this.oauthStore = new SqliteOAuthStore(stateDir);
@@ -140,20 +206,60 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
     }
 
     if (res.req.method !== "POST") {
+      const fields = authorizationFormFields(client, params);
+      setConsentHeaders(res);
       res.status(200).setHeader("Content-Type", "text/html; charset=utf-8");
       res.send(
         formHtml({
           clientName: client.client_name ?? client.client_id,
           scopes: params.scopes ?? this.config.scopes,
           resource: params.resource,
+          fields,
+          csrfToken: consentCsrfToken(this.config, fields),
+        }),
+      );
+      return;
+    }
+
+    if (!consentCsrfValid(this.config, res.req.body as Record<string, unknown>)) {
+      setConsentHeaders(res);
+      res.status(400).setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(
+        formHtml({
+          error: "This approval request is invalid or stale. Restart the connection from your MCP client.",
+          clientName: client.client_name ?? client.client_id,
+          scopes: params.scopes ?? this.config.scopes,
+          resource: params.resource,
           fields: authorizationFormFields(client, params),
+          csrfToken: consentCsrfToken(this.config, authorizationFormFields(client, params)),
         }),
       );
       return;
     }
 
     const providedToken = String(res.req.body?.owner_token ?? "");
+    const failureKey = requestIp(res.req, this.config.trustProxy) ?? "unknown";
     if (!safeEquals(providedToken, this.config.ownerToken)) {
+      if (this.ownerTokenFailureLimiter) {
+        const verdict = this.ownerTokenFailureLimiter.take(failureKey);
+        if (!verdict.allowed) {
+          setConsentHeaders(res);
+          res.setHeader("Retry-After", String(verdict.retryAfterSeconds));
+          res.status(429).setHeader("Content-Type", "text/html; charset=utf-8");
+          res.send(
+            formHtml({
+              error: `Too many failed approval attempts. Try again in ${verdict.retryAfterSeconds} seconds.`,
+              clientName: client.client_name ?? client.client_id,
+              scopes: params.scopes ?? this.config.scopes,
+              resource: params.resource,
+              fields: authorizationFormFields(client, params),
+              csrfToken: consentCsrfToken(this.config, authorizationFormFields(client, params)),
+            }),
+          );
+          return;
+        }
+      }
+      setConsentHeaders(res);
       res.status(401).setHeader("Content-Type", "text/html; charset=utf-8");
       res.send(
         formHtml({
@@ -166,6 +272,8 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
       );
       return;
     }
+
+    this.ownerTokenFailureLimiter?.reset(failureKey);
 
     const code = `code-${randomUUID()}`;
     this.codes.set(code, {

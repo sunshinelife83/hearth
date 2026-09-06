@@ -652,18 +652,28 @@ async function issueTestAccessToken(
   const client = await registration.json() as { client_id?: string };
   assert.ok(client.client_id);
 
+  const authorizeParams = new URLSearchParams({
+    response_type: "code",
+    client_id: client.client_id,
+    redirect_uri: redirectUri,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    scope: "devspace",
+    resource,
+    state: "modern-test",
+  });
+  const consentForm = await fetch(`${localBaseUrl}/authorize?${authorizeParams}`);
+  assert.equal(consentForm.status, 200, await consentForm.clone().text());
+  const consentHtml = await consentForm.text();
+  const csrfMatch = consentHtml.match(/name="csrf_token" value="([^"]+)"/);
+  assert.ok(csrfMatch, "consent form must include a csrf_token field");
+
   const approval = await fetch(`${localBaseUrl}/authorize`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: client.client_id,
-      redirect_uri: redirectUri,
-      response_type: "code",
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-      scope: "devspace",
-      resource,
-      state: "modern-test",
+      ...Object.fromEntries(authorizeParams),
+      csrf_token: csrfMatch[1],
       owner_token: ownerToken,
     }),
     redirect: "manual",
