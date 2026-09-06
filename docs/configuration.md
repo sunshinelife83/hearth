@@ -144,7 +144,7 @@ Linux; the tool is not registered on macOS, Windows, or BSD.
 
 ## Environment boundary
 
-Only two user-facing DevSpace environment variables remain:
+User-facing DevSpace environment variables (the only ones read from the environment; provider-specific overrides such as `CODEX_COMMAND`, `CLAUDE_COMMAND`, `CURSOR_COMMAND`, `COPILOT_COMMAND`, `GROK_COMMAND`, `GROK_AGENT_PROFILE`, `CODEX_HOME` are read by the subagent layer):
 
 | Variable | Purpose |
 | --- | --- |

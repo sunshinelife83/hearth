@@ -77,3 +77,25 @@ Shutdown gives active turns a bounded graceful window. If that window expires,
 the process exits with active records left durable; the next daemon startup
 reconciles stale `starting` and `running` records to `error` without discarding
 their `providerSessionId` or `latestResponse`.
+
+## DevSpace X additions (protocol v4)
+
+The daemon protocol moved to version 4 with full agent lifecycle methods,
+exposed to MCP clients through the `agent_*` tools:
+
+| Method | Purpose |
+|---|---|
+| `agent.pause` `{ id, scope, force? }` | Pause an agent. Instant between turns; with `force` the running turn is interrupted by closing its runtime. Status becomes `paused`. |
+| `agent.resume` `{ id, scope, prompt?, overrides? }` | Start a new turn on the durable provider session from `paused` (also `idle`/`error`). |
+| `agent.stop` `{ id, scope, force? }` | Stop an agent; `force` interrupts a running turn. Terminal status `stopped`. |
+| `agent.cancel` (client-side) | `stop` with `force: true`. |
+
+`agent.get` responses now include `latestOutput` — the bounded tail (64 KB) of
+the in-flight turn's incremental assistant output, streamed from providers
+that support it (ACP agents, Codex, Claude). Pi and OpenCode report output
+only when the turn completes (provider limitation, documented in
+docs/adr/devspace-x-implementation-adrs.md, ADR-017).
+
+Cancellation closes the agent's runtime immediately (`agent_cancelled` close
+reason); a turn that completes successfully after a stop/pause request never
+restores `idle` — the requested terminal status wins.

@@ -135,6 +135,7 @@ To regenerate setup:
 
 ```bash
 npx @waishnav/devspace init --force
+  (`--force` now rotates the Owner password and prints the new value in ChatGPT setups; existing access tokens stay valid until they expire — revoke them via the OAuth revocation endpoint if needed)
 ```
 
 ## Unknown `workspaceId`

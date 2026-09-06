@@ -122,3 +122,40 @@ workspace-relative output path, byte count, hash, duration, and status metadata.
 references, native file IDs, bearer credentials, presigned URLs, host paths,
 temporary paths, and base64 chunks are never included in tool logs or tool
 results.
+
+## Command policy and environment filtering (DevSpace X)
+
+Model-invoked shell tools (`exec_command`, `bash`) pass through a policy gate
+before any process spawns:
+
+- **Tier 0** — inspection (`git status`, `ls`, `grep`, ...): allowed in every mode.
+- **Tier 1** — ordinary workspace work (builds, tests, local edits): allowed above readonly.
+- **Tier 2** — outside-effect commands (network fetches, package installs, recursive
+  deletes, `git push`, permission changes, cloud CLIs): denied in readonly, require an
+  explicit `approvedByUser` claim in `supervised` mode (after the user approves in the
+  conversation; the claim is audited), and run freely in `autonomous` mode after a
+  best-effort git snapshot.
+- **Tier 3** — always blocked with no approval path: privilege escalation (`sudo`, `su`),
+  system/power management, service managers, cron, piping remote scripts into a shell,
+  SSH remote execution, and shell-profile tampering.
+
+Set the mode with `execution.mode` in `config.jsonc` (`readonly`, `supervised` — the
+default — or `autonomous`). Every decision is logged as a `policy_decision` event.
+
+Commands executed by model-invoked shell tools inherit a conservative environment
+allowlist instead of the full user environment, so model-run commands cannot read
+API keys or cloud credentials from the environment (escape hatches:
+`execution.envAllowAll`, `execution.envAllowlist`). Provider CLIs started by the
+subagent layer keep the full environment by design and are constrained by the
+allowed-roots enforcement described in
+docs/adr/devspace-x-implementation-adrs.md (ADR-014/015).
+
+Workspace snapshots (`create_snapshot`, `list_snapshots`, `rollback_snapshot`) capture
+the working tree as git refs under `refs/devspace/snapshots/...`; rollback restores
+content without touching HEAD and is subject to the same tier-2 policy.
+
+The OAuth consent page is CSRF-protected (HMAC bound to the authorization request,
+`frame-ancestors 'none'`), and the auth endpoints are rate limited (`/authorize`,
+`/register`, `/token`, plus a dedicated failure counter for the owner password).
+Enable `server.trustProxy` when running behind a tunnel so rate-limit keys use the
+real client IP.
