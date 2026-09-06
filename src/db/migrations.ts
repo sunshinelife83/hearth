@@ -42,6 +42,11 @@ const migrations: Migration[] = [
     name: "local-agent-lifecycle-output",
     up: migrateLocalAgentLifecycleOutput,
   },
+  {
+    version: 8,
+    name: "device-tokens",
+    up: migrateDeviceTokens,
+  },
 ];
 
 export function migrateDatabase(sqlite: Database.Database): void {
@@ -242,6 +247,17 @@ function migrateLocalAgentEffortRename(sqlite: Database.Database): void {
 
 function migrateLocalAgentLifecycleOutput(sqlite: Database.Database): void {
   addColumnIfMissing(sqlite, "local_agent_sessions", "latest_output", "text");
+}
+
+function migrateDeviceTokens(sqlite: Database.Database): void {
+  sqlite.exec(`
+    create table if not exists device_tokens (
+      token_hash text primary key,
+      name text not null,
+      created_at text not null,
+      last_used_at text
+    );
+  `);
 }
 
 function addColumnIfMissing(

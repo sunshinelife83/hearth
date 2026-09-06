@@ -23,6 +23,8 @@ export interface ServerConfig {
   allowedRoots: string[];
   allowedHosts: string[];
   publicBaseUrl: string;
+  /** OAuth issuer/base URL after issuerMode resolution. */
+  oauthIssuerUrl: string;
   toolMode: ToolMode;
   uiEnabled: boolean;
   stateDir: string;
@@ -73,6 +75,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     allowedRoots: normalizePaths(stored.workspaces.allowedRoots, [process.cwd()]),
     allowedHosts: normalizeAllowedHosts(derivedAllowedHosts),
     publicBaseUrl,
+    oauthIssuerUrl: stored.server.issuerMode === "local"
+      ? localPublicBaseUrl(host, port)
+      : publicBaseUrl,
     toolMode: stored.tools.mode,
     uiEnabled: stored.ui.enabled,
     stateDir: normalizePath(stored.storage.stateDir),

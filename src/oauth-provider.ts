@@ -11,6 +11,7 @@ import type {
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { checkResourceAllowed, resourceUrlFromServerUrl } from "@modelcontextprotocol/sdk/shared/auth-utils.js";
 import { requestIp } from "./logger.js";
+import { DeviceTokenStore } from "./device-tokens.js";
 import { SqliteOAuthClientsStore, SqliteOAuthStore } from "./oauth-store.js";
 
 export interface OAuthConfig {
@@ -182,6 +183,8 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
   private readonly oauthStore: SqliteOAuthStore;
   private readonly resourceServerUrl: URL;
 
+  private readonly deviceTokens: DeviceTokenStore;
+
   constructor(
     private readonly config: OAuthConfig,
     resourceServerUrl: URL,
@@ -190,6 +193,7 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
   ) {
     this.resourceServerUrl = resourceUrlFromServerUrl(resourceServerUrl);
     this.oauthStore = new SqliteOAuthStore(stateDir);
+    this.deviceTokens = new DeviceTokenStore(stateDir);
     this.clientsStore = new SqliteOAuthClientsStore(this.oauthStore, config.allowedRedirectHosts);
   }
 
@@ -346,6 +350,18 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     const record = this.oauthStore.getAccessToken(hashToken(token));
     if (!record || record.expiresAt < Math.floor(Date.now() / 1000)) {
+      // Local device tokens (created via `devspace token create`) carry the
+      // same authority; they bind to this server's protected resource.
+      const device = this.deviceTokens.verify(token);
+      if (device) {
+        return {
+          token,
+          clientId: `device:${device.name}`,
+          scopes: this.config.scopes,
+          expiresAt: Math.floor(Date.now() / 1000) + 3600,
+          resource: this.resourceServerUrl,
+        };
+      }
       throw new InvalidTokenError("Invalid or expired access token");
     }
 
@@ -366,6 +382,7 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
 
   close(): void {
     this.oauthStore.close();
+    this.deviceTokens.close();
   }
 
   private validCodeRecord(

@@ -1063,8 +1063,8 @@ export function createServer(
   app.use(
     mcpAuthRouter({
       provider: oauthProvider,
-      issuerUrl: new URL(config.publicBaseUrl),
-      baseUrl: new URL(config.publicBaseUrl),
+      issuerUrl: new URL(config.oauthIssuerUrl),
+      baseUrl: new URL(config.oauthIssuerUrl),
       resourceServerUrl,
       scopesSupported: config.oauth.scopes,
       resourceName: "DevSpace",

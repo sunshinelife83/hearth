@@ -11,6 +11,11 @@ const serverConfigSchema = z.object({
   publicBaseUrl: z.string().url().nullable().default(null),
   allowedHosts: z.array(z.string().trim().min(1)).default([]),
   trustProxy: z.boolean().default(false),
+  // "derived": OAuth issuer/base URLs follow publicBaseUrl (today's behavior,
+  // required for remote clients like ChatGPT). "local": the issuer is pinned
+  // to the local bind address so changing the tunnel URL does not invalidate
+  // OAuth clients; only meaningful for local/LAN-only deployments.
+  issuerMode: z.enum(["derived", "local"]).default("derived"),
 }).strict().prefault({});
 
 const workspacesConfigSchema = z.object({

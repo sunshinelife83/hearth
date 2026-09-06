@@ -56,6 +56,7 @@ import { shutdownHttpServer } from "./server-shutdown.js";
 type Command =
   | "serve"
   | "mcp"
+  | "token"
   | "init"
   | "doctor"
   | "config"
@@ -80,6 +81,9 @@ async function main(argv: string[]): Promise<void> {
       return;
     case "mcp":
       await runMcp();
+      return;
+    case "token":
+      await runTokenCommand(args);
       return;
     case "init":
       await runInit({ force: args.includes("--force") });
@@ -110,6 +114,7 @@ function normalizeCommand(command: string | undefined): Command {
   if (
     command === "init"
     || command === "mcp"
+    || command === "token"
     || command === "doctor"
     || command === "config"
     || command === "agents"
@@ -300,6 +305,45 @@ async function runInit({ force }: { force: boolean }): Promise<void> {
       return;
     }
     throw error;
+  }
+}
+
+async function runTokenCommand(args: string[]): Promise<void> {
+  const { loadConfig } = await import("./config.js");
+  const { DeviceTokenStore } = await import("./device-tokens.js");
+  const [sub, ...rest] = args;
+  const store = new DeviceTokenStore(loadConfig().stateDir);
+  try {
+    if (sub === "create") {
+      const name = rest[0]?.trim();
+      if (!name) throw new Error("Usage: devspace token create <name>");
+      const { token, record } = store.create(name);
+      console.log(`Device token created: ${record.createdAt}`);
+      console.log(token);
+      console.log("Store it now — it is shown only once and cannot be recovered.");
+      return;
+    }
+    if (sub === "list" || sub === undefined) {
+      const tokens = store.list();
+      if (tokens.length === 0) {
+        console.log("No device tokens. Create one: devspace token create <name>");
+        return;
+      }
+      for (const token of tokens) {
+        console.log(`${token.name}  created ${token.createdAt}${token.lastUsedAt ? `  last used ${token.lastUsedAt}` : "  never used"}`);
+      }
+      return;
+    }
+    if (sub === "revoke") {
+      const name = rest[0]?.trim();
+      if (!name) throw new Error("Usage: devspace token revoke <name>");
+      if (store.revoke(name)) console.log(`Revoked device token: ${name}`);
+      else console.log(`No device token named ${name}.`);
+      return;
+    }
+    throw new Error("Usage: devspace token create <name> | list | revoke <name>");
+  } finally {
+    store.close();
   }
 }
 
