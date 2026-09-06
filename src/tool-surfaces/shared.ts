@@ -9,6 +9,7 @@ import {
   type ExecutionDecision,
 } from "../policy/command-policy.js";
 import { createSnapshot } from "../snapshot-manager.js";
+import { probeSandboxAdapter } from "../policy/sandbox.js";
 import {
   WORKSPACE_APP_URI,
   type DiffStats,
@@ -217,4 +218,31 @@ export function countDiffStats(diff: string | undefined): DiffStats {
   }
 
   return { additions, removals };
+}
+
+export interface SandboxVerdict {
+  enabled: boolean;
+  /** Defined when policy requires a sandbox that is unavailable. */
+  denialReason?: string;
+}
+
+/**
+ * Sandbox decision for one command. "auto" sandboxes autonomous-mode
+ * executions when an adapter is available; requireSandboxForAutonomous
+ * hard-gates tier-2 commands on sandbox availability.
+ */
+export function sandboxDecision(config: ServerConfig, tier: number): SandboxVerdict {
+  if (config.execution.sandbox === "none") return { enabled: false };
+  const available = probeSandboxAdapter() !== "none";
+  const autonomous = config.execution.mode === "autonomous";
+  if (autonomous && tier >= 2 && !available && config.execution.requireSandboxForAutonomous) {
+    return {
+      enabled: false,
+      denialReason:
+        "Autonomous tier-2 commands require an OS sandbox, but none is available on this machine. " +
+        "Install bubblewrap (Linux), set execution.sandbox to 'none' explicitly, or set " +
+        "execution.requireSandboxForAutonomous to false.",
+    };
+  }
+  return { enabled: autonomous && available };
 }

@@ -13,6 +13,9 @@ export interface ExecutionConfig {
   mode: ExecutionMode;
   envAllowAll: boolean;
   envAllowlist: string[];
+  sandbox: "auto" | "none";
+  sandboxNetwork: "allow" | "deny";
+  requireSandboxForAutonomous: boolean;
 }
 
 export interface ServerConfig {
@@ -93,6 +96,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       mode: stored.execution.mode,
       envAllowAll: stored.execution.envAllowAll,
       envAllowlist: stored.execution.envAllowlist,
+      sandbox: stored.execution.sandbox,
+      sandboxNetwork: stored.execution.sandboxNetwork,
+      requireSandboxForAutonomous: stored.execution.requireSandboxForAutonomous,
     },
     agentDir: normalizePath(stored.skills.agentDir),
     logging: {

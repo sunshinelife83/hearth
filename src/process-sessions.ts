@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { filterChildEnvironment, type EnvironmentFilter } from "./policy/env-allowlist.js";
-import { resolveShellCommand, terminateProcessTree } from "./process-platform.js";
+import { resolveShellCommand, terminateProcessTree, type ShellCommand } from "./process-platform.js";
 
 const DEFAULT_EXEC_YIELD_MS = 10_000;
 const DEFAULT_INTERACTIVE_YIELD_MS = 250;
@@ -18,6 +18,8 @@ export interface StartCommandInput {
   command: string;
   cwd: string;
   workspaceRoot?: string;
+  /** Wrap the command in the OS sandbox (when a wrapper is configured). */
+  sandbox?: boolean;
   tty?: boolean;
   columns?: number;
   rows?: number;
@@ -72,6 +74,8 @@ interface ProcessSessionManagerOptions {
   completedSessionTtlMs?: number;
   /** Environment filtering for child processes (policy: env allowlist). */
   environment?: EnvironmentFilter;
+  /** Optional OS-sandbox wrapper applied when a start request asks for it. */
+  commandWrapper?: (shell: ShellCommand, context: { workspaceRoot: string }) => ShellCommand;
 }
 
 function boundedInteger(value: number | undefined, fallback: number, maximum: number): number {
@@ -223,12 +227,14 @@ export class ProcessSessionManager {
   private readonly maxBufferCharacters: number;
   private readonly completedSessionTtlMs: number;
   private readonly environment: EnvironmentFilter;
+  private readonly commandWrapper?: (shell: ShellCommand, context: { workspaceRoot: string }) => ShellCommand;
   private nextSessionId = 1;
 
   constructor(options: ProcessSessionManagerOptions = {}) {
     this.maxBufferCharacters = options.maxBufferCharacters ?? DEFAULT_BUFFER_CHARACTERS;
     this.completedSessionTtlMs = options.completedSessionTtlMs ?? COMPLETED_SESSION_TTL_MS;
     this.environment = options.environment ?? { allowAll: true };
+    this.commandWrapper = options.commandWrapper;
   }
 
   async start(input: StartCommandInput): Promise<ProcessSnapshot> {
@@ -312,6 +318,19 @@ export class ProcessSessionManager {
     }
   }
 
+  private resolveShell(input: StartCommandInput): ShellCommand {
+    const shell = resolveShellCommand(input.command);
+    if (input.sandbox && this.commandWrapper && input.workspaceRoot) {
+      try {
+        return this.commandWrapper(shell, { workspaceRoot: input.workspaceRoot });
+      } catch {
+        // Sandbox failures fall back to the unwrapped command; the wrapper
+        // logs why (best-effort hardening, never a silent behavior change).
+      }
+    }
+    return shell;
+  }
+
   private createSession(input: StartCommandInput): ProcessSession {
     let resolveExit = (): void => undefined;
     const exitPromise = new Promise<void>((resolve) => {
@@ -332,7 +351,7 @@ export class ProcessSessionManager {
   }
 
   private startPipe(session: ProcessSession, input: StartCommandInput): void {
-    const shell = resolveShellCommand(input.command);
+    const shell = this.resolveShell(input);
     const detached = process.platform !== "win32";
     const child = spawn(input.command, {
       cwd: input.cwd,
@@ -368,7 +387,7 @@ export class ProcessSessionManager {
       throw new Error("PTY support requires the optional node-pty dependency.");
     }
 
-    const shell = resolveShellCommand(input.command);
+    const shell = this.resolveShell(input);
     let pty: import("node-pty").IPty;
     try {
       pty = nodePty.spawn(shell.executable, shell.args, {

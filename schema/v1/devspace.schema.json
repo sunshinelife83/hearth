@@ -52,6 +52,14 @@
         "trustProxy": {
           "default": false,
           "type": "boolean"
+        },
+        "issuerMode": {
+          "default": "derived",
+          "type": "string",
+          "enum": [
+            "derived",
+            "local"
+          ]
         }
       },
       "additionalProperties": false
@@ -232,6 +240,26 @@
             "type": "string",
             "minLength": 1
           }
+        },
+        "sandbox": {
+          "default": "auto",
+          "type": "string",
+          "enum": [
+            "auto",
+            "none"
+          ]
+        },
+        "sandboxNetwork": {
+          "default": "allow",
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny"
+          ]
+        },
+        "requireSandboxForAutonomous": {
+          "default": false,
+          "type": "boolean"
         }
       },
       "additionalProperties": false

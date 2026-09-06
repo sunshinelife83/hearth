@@ -14,6 +14,7 @@ import {
   enforceShellPolicy,
   resultOutputSchema,
   runLoggedToolOperation,
+  sandboxDecision,
   snapshotBeforeRiskyExecution,
   textBlock,
 } from "./shared.js";
@@ -221,6 +222,14 @@ function registerCodexProcessTools(context: ToolRegistrationContext): void {
         });
         return verdict.denial;
       }
+      const sandbox = sandboxDecision(config, verdict.classification.tier);
+      if (sandbox.denialReason) {
+        return {
+          content: [textBlock(sandbox.denialReason)],
+          isError: true as const,
+          structuredContent: { result: sandbox.denialReason },
+        };
+      }
       const snapshot = await runLoggedToolOperation(
         config,
         {
@@ -243,6 +252,7 @@ function registerCodexProcessTools(context: ToolRegistrationContext): void {
             command: cmd,
             cwd,
             workspaceRoot: workspace.root,
+            sandbox: sandbox.enabled,
             tty,
             columns,
             rows,

@@ -15,6 +15,7 @@ import type { SubagentsConfig } from "./local-agent-config.js";
 import { createReviewCheckpointManager } from "./review-checkpoints.js";
 import { ProcessSessionManager } from "./process-sessions.js";
 import { createMcpServer, createServer } from "./server.js";
+import { TaskStore } from "./task-store.js";
 import { SqliteWorkspaceStore } from "./workspace-store.js";
 import { WorkspaceRegistry } from "./workspaces.js";
 import { writeTestDevspaceConfig } from "./test-support/config.test.js";
@@ -33,6 +34,9 @@ test("tool modes expose the expected host-facing tool surface", async (t) => {
         "create_snapshot", "list_snapshots", "rollback_snapshot",
         "agent_start", "agent_status", "agent_output", "agent_send",
         "agent_pause", "agent_resume", "agent_stop", "agent_cancel", "agent_list",
+        "task_create", "task_plan", "task_status", "task_list",
+        "task_verify", "task_complete", "task_cancel",
+        "context_overview", "search",
       ],
     },
     {
@@ -42,6 +46,9 @@ test("tool modes expose the expected host-facing tool surface", async (t) => {
         "create_snapshot", "list_snapshots", "rollback_snapshot",
         "agent_start", "agent_status", "agent_output", "agent_send",
         "agent_pause", "agent_resume", "agent_stop", "agent_cancel", "agent_list",
+        "task_create", "task_plan", "task_status", "task_list",
+        "task_verify", "task_complete", "task_cancel",
+        "context_overview", "search",
       ],
     },
   ];
@@ -597,6 +604,8 @@ async function fixture(
     new ProcessSessionManager(),
     resolveLocalAgentProviders,
     [],
+    undefined,
+    new TaskStore(stateDir),
   );
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "devspace-test-client", version: "1.0.0" });

@@ -12,6 +12,9 @@ function fakeConfig(mode: "readonly" | "supervised" | "autonomous"): ServerConfi
       mode,
       envAllowAll: false,
       envAllowlist: [],
+      sandbox: "none",
+      sandboxNetwork: "allow",
+      requireSandboxForAutonomous: false,
     },
   };
 }

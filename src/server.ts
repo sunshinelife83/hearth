@@ -23,7 +23,9 @@ import {
 } from "./artifact-tools.js";
 import { registerAgentTools } from "./agent-tools.js";
 import { registerTaskTools } from "./task-tools.js";
+import { registerContextTools } from "./context/context-tools.js";
 import { TaskStore } from "./task-store.js";
+import { probeSandboxAdapter, wrapCommandWithSandbox } from "./policy/sandbox.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import {
   createOpenAIIncomingArtifactAdapter,
@@ -771,6 +773,8 @@ function registerMcpSurface(
 
   registerAgentTools(registrationTarget, { config, workspaces });
 
+  registerContextTools(registrationTarget, { config, workspaces });
+
   if (taskStore) {
     registerTaskTools(registrationTarget, { config, workspaces, processSessions, taskStore });
   }
@@ -996,6 +1000,13 @@ export function createServer(
       allowAll: config.execution.envAllowAll,
       extraAllowlist: config.execution.envAllowlist,
     },
+    ...(config.execution.sandbox === "none" ? {} : {
+      commandWrapper: (shell, ctx) => wrapCommandWithSandbox(
+        shell,
+        probeSandboxAdapter(),
+        { workspaceRoot: ctx.workspaceRoot, allowNetwork: config.execution.sandboxNetwork === "allow" },
+      ),
+    }),
   });
   const toolActivities = new ToolActivityTracker();
   const localAgentProviders = buildLocalAgentProviderStatuses(

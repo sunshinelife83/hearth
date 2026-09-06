@@ -68,6 +68,13 @@ const executionConfigSchema = z.object({
   envAllowAll: z.boolean().default(false),
   // Additional environment variable names passed to model-invoked commands.
   envAllowlist: z.array(z.string().trim().min(1)).default([]),
+  // OS sandbox for autonomous-mode shell commands and verification gates:
+  // "auto" uses bubblewrap (Linux) or seatbelt (macOS) when available.
+  sandbox: z.enum(["auto", "none"]).default("auto"),
+  sandboxNetwork: z.enum(["allow", "deny"]).default("allow"),
+  // When true, autonomous-mode tier-2/3 commands are denied unless a sandbox
+  // adapter is actually available (tier 3 is always denied regardless).
+  requireSandboxForAutonomous: z.boolean().default(false),
 }).strict().prefault({});
 
 const oauthConfigSchema = z.object({

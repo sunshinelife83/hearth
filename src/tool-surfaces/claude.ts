@@ -20,6 +20,7 @@ import {
   logFailedToolResponse,
   logToolCall,
   resultOutputSchema,
+  sandboxDecision,
   snapshotBeforeRiskyExecution,
   textBlock,
 } from "./shared.js";
@@ -226,6 +227,26 @@ function registerShellTool(context: ToolRegistrationContext): void {
           startedAt,
         );
         return verdict.denial;
+      }
+      const sandbox = sandboxDecision(config, verdict.classification.tier);
+      if (sandbox.denialReason) {
+        logFailedToolResponse(
+          config,
+          {
+            tool: toolNames.shell,
+            workspaceId,
+            workingDirectory: workingDirectory ?? ".",
+            command: input.command,
+            commandLength: input.command.length,
+          },
+          [textBlock(sandbox.denialReason)],
+          startedAt,
+        );
+        return {
+          content: [textBlock(sandbox.denialReason)],
+          isError: true as const,
+          structuredContent: { result: sandbox.denialReason },
+        };
       }
       const cwd = workspaces.resolveWorkingDirectory(
         workspace,

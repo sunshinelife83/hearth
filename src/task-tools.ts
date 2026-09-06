@@ -8,7 +8,7 @@ import type { VerificationGateResult } from "./verification.js";
 import { detectVerificationGates, tailOutput, type VerificationGate, type VerificationResult } from "./verification.js";
 import { classifyCommand, decideExecution } from "./policy/command-policy.js";
 import { logEvent, commandPreview } from "./logger.js";
-import { logToolCall, resultOutputSchema, textBlock } from "./tool-surfaces/shared.js";
+import { logToolCall, resultOutputSchema, sandboxDecision, textBlock } from "./tool-surfaces/shared.js";
 import { workspaceIdDescription } from "./tool-surfaces/types.js";
 
 /**
@@ -106,6 +106,8 @@ export function registerTaskTools(target: McpRegistrationTarget, context: TaskTo
       workspaceId,
       command: gate.command,
       cwd,
+      workspaceRoot: cwd,
+      sandbox: sandboxDecision(config, classification.tier).enabled,
       yieldTimeMs: GATE_POLL_MS,
       maxOutputTokens: 4000,
     });
