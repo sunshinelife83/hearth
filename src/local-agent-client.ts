@@ -42,6 +42,7 @@ import {
 } from "./local-agent-daemon-lifecycle.js";
 import type {
   AgentContinueError,
+  AgentLifecycleError,
   AgentListError,
   AgentLookupError,
   AgentStartError,
@@ -132,6 +133,46 @@ export class LocalAgentClient {
   ): Promise<BetterResult<LocalAgentRecord[], AgentListError | AgentDaemonError>> {
     const result = await this.request("agent.list", scope);
     return decodeRequestResult(result, "agent.list", decodeAgentRecordList);
+  }
+
+  async pause(
+    agentId: string,
+    scope: LocalAgentWorkspaceScope,
+    options: { force?: boolean } = {},
+  ): Promise<BetterResult<LocalAgentRecord, AgentLifecycleError | AgentDaemonError>> {
+    const result = await this.request("agent.pause", {
+      id: agentId,
+      scope,
+      ...(options.force ? { force: true } : {}),
+    });
+    return decodeRequestResult(result, "agent.pause", decodeAgentRecord);
+  }
+
+  async resume(
+    agentId: string,
+    scope: LocalAgentWorkspaceScope,
+    options: { prompt?: string; overrides?: RunOverrides } = {},
+  ): Promise<BetterResult<LocalAgentRecord, AgentLifecycleError | AgentDaemonError>> {
+    const result = await this.request("agent.resume", {
+      id: agentId,
+      scope,
+      ...(options.prompt ? { prompt: options.prompt } : {}),
+      ...(options.overrides && Object.keys(options.overrides).length > 0 ? { overrides: options.overrides } : {}),
+    });
+    return decodeRequestResult(result, "agent.resume", decodeAgentRecord);
+  }
+
+  async stopAgent(
+    agentId: string,
+    scope: LocalAgentWorkspaceScope,
+    options: { force?: boolean } = {},
+  ): Promise<BetterResult<LocalAgentRecord, AgentLifecycleError | AgentDaemonError>> {
+    const result = await this.request("agent.stop", {
+      id: agentId,
+      scope,
+      ...(options.force ? { force: true } : {}),
+    });
+    return decodeRequestResult(result, "agent.stop", decodeAgentRecord);
   }
 
   async status(): Promise<BetterResult<LocalAgentDaemonStatus, AgentDaemonError>> {
@@ -598,6 +639,9 @@ function isRequestError(
   switch (method) {
     case "agent.start":
     case "agent.continue":
+    case "agent.pause":
+    case "agent.resume":
+    case "agent.stop":
       return category === "target"
         || category === "scope"
         || category === "conflict"

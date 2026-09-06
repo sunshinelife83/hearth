@@ -27,7 +27,7 @@ export class AgentTargetError extends TaggedError("AgentTargetError")<{
 }>() {}
 
 export class AgentConflictError extends TaggedError("AgentConflictError")<{
-  code: "AGENT_CONFLICT";
+  code: "AGENT_CONFLICT" | "AGENT_TURN_ACTIVE";
   agentId?: string;
   operation: string;
   retryable: boolean;

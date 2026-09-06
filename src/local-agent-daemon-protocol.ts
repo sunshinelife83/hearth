@@ -16,6 +16,9 @@ export type LocalAgentDaemonMethod =
   | "agent.continue"
   | "agent.get"
   | "agent.list"
+  | "agent.pause"
+  | "agent.resume"
+  | "agent.stop"
   | "daemon.status"
   | "daemon.stop"
   | "daemon.logs";
@@ -26,6 +29,9 @@ export type LocalAgentDaemonRequest =
   | AgentDaemonRequestBase<"agent.continue", { id: string; prompt: string; scope: LocalAgentWorkspaceScope; overrides?: RunOverrides }>
   | AgentDaemonRequestBase<"agent.get", { id: string; scope: LocalAgentWorkspaceScope }>
   | AgentDaemonRequestBase<"agent.list", LocalAgentWorkspaceScope>
+  | AgentDaemonRequestBase<"agent.pause", { id: string; scope: LocalAgentWorkspaceScope; force?: boolean }>
+  | AgentDaemonRequestBase<"agent.resume", { id: string; scope: LocalAgentWorkspaceScope; prompt?: string; overrides?: RunOverrides }>
+  | AgentDaemonRequestBase<"agent.stop", { id: string; scope: LocalAgentWorkspaceScope; force?: boolean }>
   | AgentDaemonRequestBase<"daemon.status", Record<string, never>>
   | AgentDaemonRequestBase<"daemon.stop", Record<string, never>>
   | AgentDaemonRequestBase<"daemon.logs", { lines?: number }>;
@@ -133,6 +139,23 @@ export function decodeLocalAgentDaemonRequest(value: unknown): LocalAgentDaemonR
         method,
         params: decodeListScope(params),
       } as LocalAgentDaemonRequest;
+    case "agent.pause":
+    case "agent.stop":
+      return {
+        requestId,
+        protocolVersion,
+        authToken,
+        method,
+        params: decodeLifecycleInput(params),
+      } as LocalAgentDaemonRequest;
+    case "agent.resume":
+      return {
+        requestId,
+        protocolVersion,
+        authToken,
+        method,
+        params: decodeResumeInput(params),
+      } as LocalAgentDaemonRequest;
     case "daemon.logs":
       return {
         requestId,
@@ -189,6 +212,7 @@ export function decodeAgentRecord(value: unknown): LocalAgentRecord {
     providerSessionId: optionalString(record?.providerSessionId),
     status,
     latestResponse: optionalContentString(record?.latestResponse),
+    latestOutput: optionalContentString(record?.latestOutput),
     error: optionalContentString(record?.error),
     errorCode: optionalString(record?.errorCode),
     errorRetryable: optionalBoolean(record?.errorRetryable),
@@ -294,6 +318,30 @@ function decodeLogsParams(value: unknown): { lines?: number } {
   return { lines };
 }
 
+function decodeLifecycleInput(value: unknown): { id: string; scope: LocalAgentWorkspaceScope; force?: boolean } {
+  const record = asRecord(value);
+  return {
+    id: requiredString(record?.id, "id"),
+    scope: decodeWorkspaceScope(record?.scope),
+    force: optionalBoolean(record?.force),
+  };
+}
+
+function decodeResumeInput(value: unknown): { id: string; scope: LocalAgentWorkspaceScope; prompt?: string; overrides?: RunOverrides } {
+  const record = asRecord(value);
+  const overrides = asRecord(record?.overrides);
+  return {
+    id: requiredString(record?.id, "id"),
+    scope: decodeWorkspaceScope(record?.scope),
+    prompt: optionalContentString(record?.prompt),
+    ...(overrides ? { overrides: {
+      model: optionalString(overrides.model),
+      effort: optionalString(overrides.effort),
+      writeMode: decodeWriteMode(overrides.writeMode),
+    } } : {}),
+  };
+}
+
 function decodeWriteMode(value: unknown): LocalAgentWriteMode | undefined {
   if (value === undefined) return undefined;
   if (value === "read_only" || value === "allowed" || value === "full_access") return value;
@@ -301,7 +349,7 @@ function decodeWriteMode(value: unknown): LocalAgentWriteMode | undefined {
 }
 
 function isLocalAgentStatus(value: string): value is LocalAgentStatus {
-  return value === "starting" || value === "running" || value === "idle" || value === "error" || value === "stopped";
+  return value === "starting" || value === "running" || value === "idle" || value === "paused" || value === "error" || value === "stopped";
 }
 
 function requiredString(value: unknown, field: string): string {

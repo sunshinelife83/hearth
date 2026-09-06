@@ -77,9 +77,11 @@ export interface AcpRuntimeOptions {
   sessionMetadata?: Map<string, unknown>;
   grokCompletionRegistry?: GrokPromptCompletionRegistry;
   promptCompletionTimeoutMs?: number;
+  outputSinks?: Map<string, (delta: string) => void>;
 }
 
 export class AcpRuntime implements LocalAgentRuntime {
+  private readonly outputSinks: Map<string, (delta: string) => void>;
   readonly provider: AcpProvider;
   private readonly child?: ChildProcessWithoutNullStreams;
   private readonly connection: AcpConnectionLike;
@@ -96,6 +98,7 @@ export class AcpRuntime implements LocalAgentRuntime {
   private closed = false;
 
   constructor(options: AcpRuntimeOptions, connection: AcpConnectionLike) {
+    this.outputSinks = options.outputSinks ?? new Map();
     this.provider = options.provider;
     this.child = options.child;
     this.connection = connection;
@@ -161,6 +164,7 @@ export class AcpRuntime implements LocalAgentRuntime {
           : undefined;
         try {
           queue.values.length = 0;
+          if (callbacks?.onOutput) this.outputSinks.set(sessionId, callbacks.onOutput);
           const standardResponse = this.connection.agent.request("session/prompt", {
             sessionId,
             prompt: [{ type: "text", text: input.prompt }],
@@ -195,6 +199,7 @@ export class AcpRuntime implements LocalAgentRuntime {
         } finally {
           if (promptId) this.grokCompletionRegistry?.remove(sessionId, promptId);
           this.activeSessions.delete(sessionId);
+          this.outputSinks.delete(sessionId);
         }
       },
     });
@@ -415,6 +420,9 @@ export class AcpLocalAgentDriver implements LocalAgentDriver {
   readonly idleTimeoutMs = 5 * 60_000;
   private commandResolved = false;
   private resolvedCommand?: string;
+  // Shared with the per-runtime output plumbing: run() registers per-session
+  // sinks, the long-lived session/update notification drains chunk text.
+  private readonly outputSinks = new Map<string, (delta: string) => void>();
 
   constructor(
     provider: AcpProvider,
@@ -489,6 +497,7 @@ export class AcpLocalAgentDriver implements LocalAgentDriver {
           const { client, methods, ndJsonStream } = await import("@agentclientprotocol/sdk");
           const queues = new Map<string, AcpSessionQueue>();
           const sessionWriteModes = new Map<string, LocalAgentWriteMode>();
+          const outputSinks = this.outputSinks;
           const grokCompletionRegistry = this.provider === "grok"
             ? new GrokPromptCompletionRegistry()
             : undefined;
@@ -504,6 +513,8 @@ export class AcpLocalAgentDriver implements LocalAgentDriver {
               const sessionId = context.params.sessionId;
               const queue = queues.get(sessionId);
               if (queue) appendAcpQueueValue(queue, context.params);
+              const chunk = readAcpChunkText(context.params);
+              if (chunk) outputSinks.get(sessionId)?.(chunk);
             });
           if (grokCompletionRegistry) {
             for (const method of [
@@ -544,6 +555,7 @@ export class AcpLocalAgentDriver implements LocalAgentDriver {
             queues,
             sessionWriteModes,
             grokCompletionRegistry,
+            outputSinks: this.outputSinks,
           }, connection);
           // AcpRuntime installs the long-lived child error listener before this
           // startup-only listener is removed, so there is no unobserved gap.
@@ -816,6 +828,20 @@ function hasAcpConfigOptions(value: unknown): boolean {
   const record = asRecord(value);
   const response = asRecord(record?.newSessionResponse) ?? record;
   return Array.isArray(response?.configOptions);
+}
+
+function readAcpChunkText(value: unknown): string | undefined {
+  const record = asRecord(value);
+  const content = asRecord(record?.content);
+  if (
+    record?.sessionUpdate === "agent_message_chunk"
+    && content?.type === "text"
+    && typeof content.text === "string"
+    && content.text.length > 0
+  ) {
+    return content.text;
+  }
+  return undefined;
 }
 
 function appendAcpQueueValue(queue: AcpSessionQueue, value: unknown): void {

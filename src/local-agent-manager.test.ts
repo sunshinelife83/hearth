@@ -305,16 +305,16 @@ const wrongWorkspaceId = await manager.continue(
 assert.equal(wrongWorkspaceId.isErr(), true);
 if (wrongWorkspaceId.isErr()) assert.equal(wrongWorkspaceId.error.code, "WORKSPACE_MISMATCH");
 
-const directOutside = unwrap(await manager.start({
+// SEC-04 fix: allowed roots apply to every caller, including direct
+// (CLI-style) starts without a workspaceId. Direct starts within allowed
+// roots keep working, outside roots are rejected.
+const directOutside = await manager.start({
   target: "reviewer",
   prompt: "direct outside allowed roots",
   workspaceRoot: directRoot,
-}));
-await waitFor(() => unwrap(manager.get(directOutside.id, { workspaceRoot: directRoot })).status === "idle");
-assert.equal(directOutside.workspaceId, undefined);
-assert.deepEqual(unwrap(manager.list({ workspaceRoot: directRoot })).map((record) => record.id), [
-  directOutside.id,
-]);
+});
+assert.equal(directOutside.isErr(), true);
+if (directOutside.isErr()) assert.equal(directOutside.error.code, "WORKSPACE_NOT_ALLOWED");
 
 const direct = unwrap(await manager.start({
   target: "reviewer",

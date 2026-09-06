@@ -107,6 +107,9 @@ function processEnvironment(
     CODEX_CI: "1",
     LANG: process.env.LANG ?? "C.UTF-8",
     LC_ALL: process.env.LC_ALL ?? "C.UTF-8",
+    // Marks shells spawned by DevSpace tools so CLI helpers invoked from a
+    // model-run command cannot bypass workspace scoping.
+    DEVSPACE_ORIGIN: "devspace-shell",
     ...(input?.workspaceId ? { DEVSPACE_WORKSPACE_ID: input.workspaceId } : {}),
     ...(input?.workspaceRoot ? { DEVSPACE_WORKSPACE_ROOT: input.workspaceRoot } : {}),
   };

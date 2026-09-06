@@ -55,6 +55,31 @@ class FakeManager implements LocalAgentDaemonManager {
     return Result.ok({ ...record, status: "running" } as LocalAgentRecord);
   }
 
+  async pause(
+    _agentId: string,
+    _scope: { workspaceId: string; workspaceRoot: string },
+    _options?: { force?: boolean },
+  ) {
+    return Result.ok({ ...record, status: "paused" } as LocalAgentRecord);
+  }
+
+  async resume(
+    _agentId: string,
+    _prompt: string | undefined,
+    _overrides: RunOverrides | undefined,
+    _scope: { workspaceId: string; workspaceRoot: string },
+  ) {
+    return Result.ok({ ...record, status: "running" } as LocalAgentRecord);
+  }
+
+  async stop(
+    _agentId: string,
+    _scope: { workspaceId: string; workspaceRoot: string },
+    _options?: { force?: boolean },
+  ) {
+    return Result.ok({ ...record, status: "stopped" } as LocalAgentRecord);
+  }
+
   get(_id: string, _scope: { workspaceId: string; workspaceRoot: string }) {
     return Result.ok(record);
   }
@@ -301,10 +326,10 @@ const upgradeClient = new LocalAgentClient({
   },
 });
 try {
-  assert.equal(unwrap(await upgradeClient.ensureReady()).protocolVersion, 3);
+  assert.equal(unwrap(await upgradeClient.ensureReady()).protocolVersion, LOCAL_AGENT_DAEMON_PROTOCOL_VERSION);
   assert.equal(replacementSpawns, 1);
   assert.equal(spawnedBeforeLegacyLockReleased, false);
-  assert.deepEqual(legacyMethods.slice(0, 3), ["hello:3", "hello:1", "daemon.stop:1"]);
+  assert.deepEqual(legacyMethods.slice(0, 3), [`hello:${LOCAL_AGENT_DAEMON_PROTOCOL_VERSION}`, "hello:1", "daemon.stop:1"]);
 } finally {
   legacyLock.release();
   await replacementDaemon.close();
@@ -497,7 +522,7 @@ try {
 
   const unauthorized = await sendRawRequest(socketDaemon.paths.endpoint, JSON.stringify({
     requestId: "unauthorized",
-    protocolVersion: 3,
+    protocolVersion: LOCAL_AGENT_DAEMON_PROTOCOL_VERSION,
     authToken: "wrong-secret",
     method: "hello",
     params: {},

@@ -21,6 +21,7 @@ import {
   isArtifactDownloadSupportedPlatform,
   registerArtifactTools,
 } from "./artifact-tools.js";
+import { registerAgentTools } from "./agent-tools.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import {
   createOpenAIIncomingArtifactAdapter,
@@ -763,6 +764,8 @@ function registerMcpSurface(
     },
   );
 
+  registerAgentTools(registrationTarget, { config, workspaces });
+
   if (config.artifactsEnabled && isArtifactDownloadSupportedPlatform()) {
     registerArtifactTools(registrationTarget, {
       config,
@@ -772,8 +775,7 @@ function registerMcpSurface(
   }
 
   registrationTarget.registerTool(
-    "create_snapshot",
-    {
+    "create_snapshot",    {
       title: "Create snapshot",
       description:
         "Capture a restorable snapshot of the workspace working tree (tracked and untracked files, not git-ignored ones) as a git ref. Use before risky multi-step changes so the work can be restored later.",

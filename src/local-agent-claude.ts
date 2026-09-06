@@ -160,6 +160,10 @@ export class ClaudeQueryRuntime implements LocalAgentRuntime {
               await callbacks?.onSessionId?.(this.providerSessionId);
             }
           }
+          if (record?.type === "assistant") {
+            const delta = claudeAssistantText(record);
+            if (delta) callbacks?.onOutput?.(delta);
+          }
           if (record?.type !== "result") continue;
 
           const resultError = claudeResultError(record);
@@ -384,4 +388,19 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : undefined;
+}
+
+function claudeAssistantText(record: Record<string, unknown>): string | undefined {
+  const content = record.message && typeof record.message === "object"
+    ? (record.message as Record<string, unknown>).content
+    : undefined;
+  if (!Array.isArray(content)) return undefined;
+  const parts: string[] = [];
+  for (const block of content) {
+    const item = block && typeof block === "object" ? (block as Record<string, unknown>) : undefined;
+    if (item?.type === "text" && typeof item.text === "string" && item.text) {
+      parts.push(item.text);
+    }
+  }
+  return parts.length > 0 ? parts.join("") : undefined;
 }

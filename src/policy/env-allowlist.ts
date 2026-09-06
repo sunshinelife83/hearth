@@ -85,6 +85,7 @@ export function filterChildEnvironment(
     allowlist.add("DEVSPACE_WORKSPACE_ID");
     allowlist.add("DEVSPACE_WORKSPACE_ROOT");
   }
+  allowlist.add("DEVSPACE_ORIGIN");
 
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(source)) {

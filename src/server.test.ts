@@ -28,11 +28,21 @@ test("tool modes expose the expected host-facing tool surface", async (t) => {
   }> = [
     {
       mode: "claude",
-      expected: ["open_workspace", "read", "write", "edit", "bash", "show_changes"],
+      expected: [
+        "open_workspace", "read", "write", "edit", "bash", "show_changes",
+        "create_snapshot", "list_snapshots", "rollback_snapshot",
+        "agent_start", "agent_status", "agent_output", "agent_send",
+        "agent_pause", "agent_resume", "agent_stop", "agent_cancel", "agent_list",
+      ],
     },
     {
       mode: "codex",
-      expected: ["open_workspace", "read", "apply_patch", "exec_command", "write_stdin", "show_changes"],
+      expected: [
+        "open_workspace", "read", "apply_patch", "exec_command", "write_stdin", "show_changes",
+        "create_snapshot", "list_snapshots", "rollback_snapshot",
+        "agent_start", "agent_status", "agent_output", "agent_send",
+        "agent_pause", "agent_resume", "agent_stop", "agent_cancel", "agent_list",
+      ],
     },
   ];
 

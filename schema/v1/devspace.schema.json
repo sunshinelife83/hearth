@@ -208,6 +208,34 @@
       ],
       "additionalProperties": false
     },
+    "execution": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "mode": {
+          "default": "supervised",
+          "type": "string",
+          "enum": [
+            "readonly",
+            "supervised",
+            "autonomous"
+          ]
+        },
+        "envAllowAll": {
+          "default": false,
+          "type": "boolean"
+        },
+        "envAllowlist": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "logging": {
       "default": {},
       "type": "object",

@@ -137,6 +137,7 @@ function presentAgentStatus(status: LocalAgentStatus): AgentCommandStatus {
     case "running":
       return "running";
     case "idle":
+    case "paused":
       return "completed";
     case "error":
       return "failed";

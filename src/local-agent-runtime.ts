@@ -29,6 +29,12 @@ export interface LocalAgentRunCallbacks {
    * could otherwise fail and lose that identity.
    */
   onSessionId?: (providerSessionId: string) => void | Promise<void>;
+  /**
+   * Incremental assistant output for the running turn (deltas of assistant
+   * text when the provider streams them). Fire-and-forget: implementations
+   * must not throw and callers must not await side effects on it.
+   */
+  onOutput?: (delta: string) => void;
 }
 
 export interface LocalAgentRuntimeContext {

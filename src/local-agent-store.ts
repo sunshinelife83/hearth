@@ -4,7 +4,7 @@ import { Result, type Result as BetterResult } from "better-result";
 import { openDatabase, type DatabaseHandle } from "./db/client.js";
 import { AgentStoreError, isProgrammerDefect } from "./local-agent-errors.js";
 
-export type LocalAgentStatus = "starting" | "running" | "idle" | "error" | "stopped";
+export type LocalAgentStatus = "starting" | "running" | "idle" | "paused" | "error" | "stopped";
 
 export interface LocalAgentRecord {
   id: string;
@@ -17,6 +17,8 @@ export interface LocalAgentRecord {
   providerSessionId?: string;
   status: LocalAgentStatus;
   latestResponse?: string;
+  /** Tail of the in-flight turn's incremental output (bounded). */
+  latestOutput?: string;
   error?: string;
   errorCode?: string;
   errorRetryable?: boolean;
@@ -54,6 +56,7 @@ interface LocalAgentRow {
   provider_session_id: string | null;
   status: string;
   latest_response: string | null;
+  latest_output: string | null;
   error: string | null;
   error_code: string | null;
   error_retryable: string | null;
@@ -202,6 +205,7 @@ export class LocalAgentStore {
           provider_session_id = ?,
           status = ?,
           latest_response = ?,
+          latest_output = ?,
           error = ?,
           error_code = ?,
           error_retryable = ?,
@@ -218,6 +222,7 @@ export class LocalAgentStore {
         updated.providerSessionId ?? null,
         updated.status,
         updated.latestResponse ?? null,
+        updated.latestOutput ?? null,
         updated.error ?? null,
         updated.errorCode ?? null,
         updated.errorRetryable === undefined ? null : String(updated.errorRetryable),
@@ -275,6 +280,7 @@ function rowToLocalAgentRecord(row: LocalAgentRow): LocalAgentRecord {
     providerSessionId: row.provider_session_id ?? undefined,
     status: readStatus(row.status),
     latestResponse: row.latest_response ?? undefined,
+    latestOutput: row.latest_output ?? undefined,
     error: row.error ?? undefined,
     errorCode: row.error_code ?? undefined,
     errorRetryable: readOptionalBoolean(row.error_retryable),
@@ -303,6 +309,7 @@ function readStatus(status: string): LocalAgentStatus {
     status === "starting" ||
     status === "running" ||
     status === "idle" ||
+    status === "paused" ||
     status === "error" ||
     status === "stopped"
   ) {

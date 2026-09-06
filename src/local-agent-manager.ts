@@ -71,6 +71,12 @@ export type AgentStartError = AgentTargetError | AgentScopeError | AgentConflict
 export type AgentContinueError = AgentStartError;
 export type AgentLookupError = AgentTargetError | AgentScopeError | AgentStoreError;
 export type AgentListError = AgentScopeError | AgentStoreError;
+export type AgentLifecycleError = AgentLookupError | AgentConflictError;
+
+/**
+ * Bound for the persisted in-flight output tail (characters).
+ */
+const MAX_OUTPUT_CHARS = 64_000;
 
 /**
  * Owns one durable DevSpace agent's turn lifecycle. Provider runtimes remain
@@ -87,6 +93,14 @@ export class LocalAgentManager {
   private readonly logger?: LocalAgentManagerLogger;
   private readonly subagents: SubagentsConfig;
   private readonly activeTurns = new Map<string, Promise<void>>();
+  private readonly activeRuntimeKeys = new Map<string, string>();
+  private readonly outputBuffers = new Map<string, string>();
+  /**
+   * Stop/pause requests for agents with an in-flight turn. When the provider
+   * run fails because its runtime was force-closed, the terminal status is
+   * taken from here instead of persisting a provider error.
+   */
+  private readonly interruptedAgents = new Map<string, "stopped" | "paused">();
   private accepting = true;
   private closePromise?: Promise<void>;
 
@@ -199,6 +213,142 @@ export class LocalAgentManager {
     ));
   }
 
+  /**
+   * Pause an agent. Between turns this only flips the durable status; with
+   * `force` a running turn is interrupted by closing its runtime.
+   */
+  async pause(
+    agentId: string,
+    scope: LocalAgentWorkspaceScope,
+    options: { force?: boolean } = {},
+  ): Promise<BetterResult<LocalAgentRecord, AgentLifecycleError>> {
+    const lookup = this.store.getByIdResult(agentId);
+    if (lookup.isErr()) return lookup;
+    const record = lookup.value;
+    if (!record) return Result.err(agentNotFound(agentId));
+    const scoped = this.agentWorkspaceResult(record, scope, "pause");
+    if (scoped.isErr()) return scoped;
+
+    if (this.activeTurns.has(agentId)) {
+      if (!options.force) {
+        return Result.err(new AgentConflictError({
+          code: "AGENT_TURN_ACTIVE",
+          agentId,
+          operation: "pause",
+          retryable: true,
+          message: `Agent ${agentId} has a running turn. Wait for it to finish or pause with force.`,
+        }));
+      }
+      await this.interruptTurn(agentId, "paused");
+    }
+
+    return this.store.updateResult(agentId, {
+      status: "paused",
+      error: undefined,
+      errorCode: undefined,
+      errorRetryable: undefined,
+    });
+  }
+
+  /**
+   * Resume a paused agent (idle/error agents also resume) by starting a new
+   * turn on the durable provider session.
+   */
+  async resume(
+    agentId: string,
+    prompt: string | undefined,
+    overrides: RunOverrides = {},
+    scope: LocalAgentWorkspaceScope,
+  ): Promise<BetterResult<LocalAgentRecord, AgentLifecycleError>> {
+    const manager = this;
+    return Result.gen(async function* () {
+      yield* manager.acceptingResult("resume", agentId);
+      const record = yield* manager.store.getByIdResult(agentId);
+      if (!record) return Result.err(agentNotFound(agentId));
+      yield* manager.agentWorkspaceResult(record, scope, "resume");
+      if (manager.activeTurns.has(agentId)) {
+        return Result.err(new AgentConflictError({
+          code: "AGENT_CONFLICT",
+          agentId,
+          operation: "resume",
+          retryable: true,
+          message: `Agent ${agentId} already has a running turn.`,
+        }));
+      }
+      if (record.status === "starting" || record.status === "running") {
+        return Result.err(new AgentConflictError({
+          code: "AGENT_CONFLICT",
+          agentId,
+          operation: "resume",
+          retryable: true,
+          message: `Agent ${agentId} is ${record.status}; resume applies to paused, idle, or error agents.`,
+        }));
+      }
+      const profiles = yield* Result.await(manager.loadProfilesResult(record.workspaceRoot, record.profileName));
+      yield* manager.profileForRecordResult(record, profiles);
+      yield* manager.providerEnabledResult(record.provider, record.profileName, "resume");
+      yield* manager.driverResult(record.provider, "resume", agentId);
+      return manager.begin(record, prompt ?? "Resume the task.", overrides, scope.workspaceId);
+    });
+  }
+
+  /**
+   * Stop an agent. Between turns this flips the durable status to stopped;
+   * with `force` (or via cancel()) a running turn is interrupted.
+   */
+  async stop(
+    agentId: string,
+    scope: LocalAgentWorkspaceScope,
+    options: { force?: boolean } = {},
+  ): Promise<BetterResult<LocalAgentRecord, AgentLifecycleError>> {
+    const lookup = this.store.getByIdResult(agentId);
+    if (lookup.isErr()) return lookup;
+    const record = lookup.value;
+    if (!record) return Result.err(agentNotFound(agentId));
+    const scoped = this.agentWorkspaceResult(record, scope, "stop");
+    if (scoped.isErr()) return scoped;
+
+    if (this.activeTurns.has(agentId)) {
+      if (!options.force) {
+        return Result.err(new AgentConflictError({
+          code: "AGENT_TURN_ACTIVE",
+          agentId,
+          operation: "stop",
+          retryable: true,
+          message: `Agent ${agentId} has a running turn. Wait for it to finish or stop with force.`,
+        }));
+      }
+      await this.interruptTurn(agentId, "stopped");
+    }
+
+    return this.store.updateResult(agentId, {
+      status: "stopped",
+      error: undefined,
+      errorCode: undefined,
+      errorRetryable: undefined,
+    });
+  }
+
+  /** Unconditional stop: interrupts a running turn when one exists. */
+  async cancel(
+    agentId: string,
+    scope: LocalAgentWorkspaceScope,
+  ): Promise<BetterResult<LocalAgentRecord, AgentLifecycleError>> {
+    return this.stop(agentId, scope, { force: true });
+  }
+
+  private async interruptTurn(agentId: string, target: "stopped" | "paused"): Promise<void> {
+    this.interruptedAgents.set(agentId, target);
+    const runtimeKey = this.activeRuntimeKeys.get(agentId);
+    if (runtimeKey) {
+      try {
+        await this.pool.cancelRuntimeKey(runtimeKey, `agent_${target}`);
+      } finally {
+        this.activeRuntimeKeys.delete(agentId);
+      }
+    }
+  }
+
   async close(): Promise<void> {
     if (this.closePromise) return this.closePromise;
     this.accepting = false;
@@ -251,11 +401,13 @@ export class LocalAgentManager {
       model: overrides.model ?? record.model,
       effort: overrides.effort ?? record.effort,
       latestResponse: undefined,
+      latestOutput: undefined,
       error: undefined,
       errorCode: undefined,
       errorRetryable: undefined,
     });
     if (updated.isErr()) return updated;
+    this.outputBuffers.set(record.id, "");
     // Defer invocation until after the tracking entry is visible. This keeps
     // cleanup correct even if runTurn later gains a synchronous completion path.
     const turn = Promise.resolve().then(() => (
@@ -318,6 +470,7 @@ export class LocalAgentManager {
         effort: input.value.effort,
         agentDir: this.agentDir,
       };
+      this.activeRuntimeKeys.set(record.id, driver.value.runtimeKey(context));
       const callbacks: LocalAgentRunCallbacks = {
         onSessionId: (providerSessionId) => {
           const current = this.store.getByIdResult(record.id);
@@ -325,6 +478,15 @@ export class LocalAgentManager {
           if (!current.value || current.value.providerSessionId === providerSessionId) return;
           const updated = this.store.updateResult(record.id, { providerSessionId });
           if (updated.isErr()) throw updated.error;
+        },
+        onOutput: (delta) => {
+          if (!delta) return;
+          const buffer = ((this.outputBuffers.get(record.id) ?? "") + delta).slice(-MAX_OUTPUT_CHARS);
+          this.outputBuffers.set(record.id, buffer);
+          const persisted = this.store.updateResult(record.id, { latestOutput: buffer });
+          if (persisted.isErr()) {
+            this.log("warn", "agent_output_persist_failed", { agentId: record.id });
+          }
         },
       };
       const result = await this.pool.run(driver.value, context, input.value, callbacks);
@@ -336,6 +498,17 @@ export class LocalAgentManager {
       const current = this.store.getByIdResult(record.id);
       if (current.isErr()) throw current.error;
       if (!current.value) return;
+      const interrupted = this.interruptedAgents.get(record.id);
+      if (interrupted) {
+        this.store.updateResult(record.id, {
+          providerSessionId: runResult.providerSessionId ?? current.value.providerSessionId,
+          status: interrupted,
+          error: undefined,
+          errorCode: undefined,
+          errorRetryable: undefined,
+        });
+        return;
+      }
       const updated = this.store.updateResult(record.id, {
         providerSessionId: runResult.providerSessionId ?? current.value.providerSessionId,
         status: "idle",
@@ -374,6 +547,9 @@ export class LocalAgentManager {
       throw error;
     } finally {
       this.activeTurns.delete(record.id);
+      this.activeRuntimeKeys.delete(record.id);
+      this.outputBuffers.delete(record.id);
+      this.interruptedAgents.delete(record.id);
     }
   }
 
@@ -382,6 +558,23 @@ export class LocalAgentManager {
     error: LocalAgentError,
     startedAt: number,
   ): void {
+    const interrupted = this.interruptedAgents.get(record.id);
+    if (interrupted) {
+      const persisted = this.store.updateResult(record.id, {
+        status: interrupted,
+        error: undefined,
+        errorCode: undefined,
+        errorRetryable: undefined,
+      });
+      this.log("info", "agent_turn_interrupted", {
+        provider: record.provider,
+        agentId: record.id,
+        status: interrupted,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        persistenceFailed: persisted.isErr(),
+      });
+      return;
+    }
     const persisted = this.store.updateResult(record.id, {
       status: "error",
       error: error.message,
@@ -522,7 +715,12 @@ export class LocalAgentManager {
     operation: string,
   ): BetterResult<string, AgentScopeError> {
     const normalized = resolve(workspaceRoot);
-    if (!workspaceId || !this.allowedRoots) return Result.ok(normalized);
+    // Security: allowed roots apply to every caller. The previous behavior
+    // skipped the check when workspaceId was absent, which let MCP-shell
+    // invocations (`devspace agents run` via a shell tool) run agents
+    // anywhere on disk (audit finding SEC-04).
+    void workspaceId;
+    if (!this.allowedRoots) return Result.ok(normalized);
     try {
       return Result.ok(assertAllowedPath(normalized, [...this.allowedRoots]));
     } catch (cause) {

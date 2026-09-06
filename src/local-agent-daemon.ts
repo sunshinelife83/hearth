@@ -34,6 +34,7 @@ import {
 import type { Result } from "better-result";
 import type {
   AgentContinueError,
+  AgentLifecycleError,
   AgentListError,
   AgentLookupError,
   AgentStartError,
@@ -53,6 +54,9 @@ export interface LocalAgentDaemonManager {
   continue(agentId: string, prompt: string, overrides: RunOverrides | undefined, scope: LocalAgentWorkspaceScope): Promise<Result<LocalAgentRecord, AgentContinueError>>;
   get(agentId: string, scope: LocalAgentWorkspaceScope): Result<LocalAgentRecord, AgentLookupError>;
   list(scope: LocalAgentWorkspaceScope): Result<LocalAgentRecord[], AgentListError>;
+  pause(agentId: string, scope: LocalAgentWorkspaceScope, options?: { force?: boolean }): Promise<Result<LocalAgentRecord, AgentLifecycleError>>;
+  resume(agentId: string, prompt: string | undefined, overrides: RunOverrides | undefined, scope: LocalAgentWorkspaceScope): Promise<Result<LocalAgentRecord, AgentLifecycleError>>;
+  stop(agentId: string, scope: LocalAgentWorkspaceScope, options?: { force?: boolean }): Promise<Result<LocalAgentRecord, AgentLifecycleError>>;
   evictIdle(now?: number): Promise<void>;
   close(): Promise<void>;
   readonly activeTurnCount: number;
@@ -307,6 +311,25 @@ export class LocalAgentDaemon {
         return unwrapManagerResult(this.manager.get(request.params.id, request.params.scope));
       case "agent.list":
         return unwrapManagerResult(this.manager.list(request.params));
+      case "agent.pause":
+        return unwrapManagerResult(await this.manager.pause(
+          request.params.id,
+          request.params.scope,
+          { force: request.params.force },
+        ));
+      case "agent.resume":
+        return unwrapManagerResult(await this.manager.resume(
+          request.params.id,
+          request.params.prompt,
+          request.params.overrides,
+          request.params.scope,
+        ));
+      case "agent.stop":
+        return unwrapManagerResult(await this.manager.stop(
+          request.params.id,
+          request.params.scope,
+          { force: request.params.force },
+        ));
       case "daemon.status":
         return this.status();
       case "daemon.stop":

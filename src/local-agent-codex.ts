@@ -147,7 +147,19 @@ export class CodexAppServerRuntime implements LocalAgentRuntime {
         }
 
         await callbacks?.onSessionId?.(threadId);
-        const completed = await this.rpc.runTurn(threadId, turnParams(input, threadId));
+        const onEvent = (event: CodexEvent) => {
+          const item = asRecord(asRecord(event.params)?.item);
+          const type = item?.type;
+          const text = item?.text;
+          if (
+            (type === "agentMessage" || type === "agent_message")
+            && typeof text === "string"
+            && text.trim()
+          ) {
+            callbacks?.onOutput?.(`${text}\n\n`);
+          }
+        };
+        const completed = await this.rpc.runTurn(threadId, turnParams(input, threadId), onEvent);
         const parsed = parseCompletedTurn(completed.event.params, completed.items);
         if (parsed.failure) {
           throw new AgentProviderExecutionError({
@@ -323,6 +335,7 @@ interface CodexTurnAccumulator {
   completed?: CodexEvent;
   resolve: (result: CodexTurnResult) => void;
   reject: (error: Error) => void;
+  onEvent?: (event: CodexEvent) => void;
 }
 
 class CodexAppServerRpc {
@@ -360,7 +373,7 @@ class CodexAppServerRpc {
     this.write({ method, ...(params === undefined ? {} : { params }) });
   }
 
-  async runTurn(threadId: string, params: unknown): Promise<CodexTurnResult> {
+  async runTurn(threadId: string, params: unknown, onEvent?: (event: CodexEvent) => void): Promise<CodexTurnResult> {
     if (this.fatalError) throw this.fatalError;
     if (this.turns.has(threadId)) throw new Error(`Codex thread ${threadId} already has an active turn.`);
     let resolveTurn!: (result: CodexTurnResult) => void;
@@ -374,6 +387,7 @@ class CodexAppServerRpc {
       items: [],
       resolve: resolveTurn,
       reject: rejectTurn,
+      ...(onEvent ? { onEvent } : {}),
     };
     this.turns.set(threadId, turn);
     try {
@@ -435,6 +449,7 @@ class CodexAppServerRpc {
       turn.items.push(params.item);
       if (turn.items.length > MAX_TURN_ITEMS) turn.items.shift();
     }
+    turn.onEvent?.(event);
     if (event.method !== "turn/completed" || !turnMatchesEvent(turn, event)) return;
     turn.completed = event;
     turn.resolve({ event, items: turn.items.slice() });

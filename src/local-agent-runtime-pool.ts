@@ -129,6 +129,9 @@ export class LocalAgentRuntimePool {
         if (reservationError) throw reservationError;
         await inputCallbacks?.onSessionId?.(providerSessionId);
       },
+      onOutput: (delta) => {
+        inputCallbacks?.onOutput?.(delta);
+      },
     };
     const startedAt = this.now();
     try {
@@ -249,6 +252,24 @@ export class LocalAgentRuntimePool {
 
   get size(): number {
     return this.entries.size;
+  }
+
+  /**
+   * Force-close the runtime serving a runtime key (used for agent
+   * stop/cancel). Any in-flight provider run on that runtime fails as a
+   * consequence; the caller owns translating that into a terminal status.
+   * Returns false when no live runtime exists for the key.
+   */
+  async cancelRuntimeKey(key: string, reason: string): Promise<boolean> {
+    const entry = this.entries.get(key);
+    if (!entry) return false;
+    if (entry.createPromise) {
+      // Wait for single-flight creation to settle so closeEntry always sees
+      // either a runtime or a creation failure instead of racing it.
+      await entry.createPromise.catch(() => undefined);
+    }
+    await this.removeAndClose(entry, reason === "agent_paused" || reason === "agent_stopped" ? "agent_cancelled" : reason);
+    return true;
   }
 
   private async acquire(
@@ -372,7 +393,12 @@ export class LocalAgentRuntimePool {
         return;
       }
       if (!runtime) return;
-      if (reason !== "server_shutdown" && reason !== "runtime_crashed" && reason !== "runtime_not_alive") {
+      if (
+        reason !== "server_shutdown"
+        && reason !== "runtime_crashed"
+        && reason !== "runtime_not_alive"
+        && reason !== "agent_cancelled"
+      ) {
         await this.waitForNoActiveRuns(entry);
       }
       if (reason === "server_shutdown") {
