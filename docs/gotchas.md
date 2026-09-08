@@ -2,6 +2,25 @@
 
 This page collects the setup issues users are most likely to hit.
 
+## npm Install Warnings (deprecated, funding, allow-scripts)
+
+These are noise, with one exception:
+
+- `deprecated prebuild-install` / `node-domexception`: transitive dependencies
+  of `better-sqlite3` and the fetch stack. Harmless; they come from upstream
+  packages, not Hearth.
+- `looking for funding`: informational. Ignore it.
+- `allow-scripts ... not yet covered`: npm 11+ gates install scripts. Hearth
+  needs its own postinstall plus the `better-sqlite3` and `node-pty` native
+  builds. If `hearth doctor` later reports `SQLite native dependency` as
+  anything but `ok`, reinstall with the scripts pre-approved:
+
+```bash
+npm install -g --allow-scripts="@sunshinelife83/hearth,better-sqlite3,node-pty" @sunshinelife83/hearth
+```
+
+`./install.sh` already passes these flags on the npm path.
+
 ## `hearth` Command Not Found
 
 Use `npx`:

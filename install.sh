@@ -64,7 +64,10 @@ install_pkg() {
   if pnpm_global_usable; then
     pnpm add -g "$PKG"
   elif command -v npm >/dev/null 2>&1; then
-    npm install -g "$PKG"
+    # npm 11+ gates install scripts behind allow-scripts. Hearth needs its
+    # own postinstall plus native builds (better-sqlite3, node-pty), so
+    # pre-approve exactly those instead of --allow-scripts=all.
+    npm install -g --allow-scripts="@sunshinelife83/hearth,better-sqlite3,node-pty" "$PKG"
   else
     echo "error: need pnpm or npm on PATH." >&2
     exit 1
