@@ -9,7 +9,7 @@
 <p align="center">Bring a Codex-style coding workflow to ChatGPT.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@sunshinelive83/hearth"><img alt="npm" src="https://img.shields.io/npm/v/%40waishnav%2Fhearth?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@sunshinelife83/hearth"><img alt="npm" src="https://img.shields.io/npm/v/%40waishnav%2Fhearth?style=flat-square" /></a>
   <a href="https://github.com/Waishnav/hearth/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Waishnav/hearth/ci.yml?style=flat-square&branch=main" /></a>
   <a href="https://github.com/Waishnav/hearth/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/npm/l/%40waishnav%2Fhearth?style=flat-square" /></a>
 </p>
@@ -65,12 +65,12 @@ Hearth requires Node `>=22.19 <27`.
 Install the Hearth CLI (works like `opencode` once installed):
 
 ```bash
-npm install -g @sunshinelive83/hearth
+npm install -g @sunshinelife83/hearth
 ```
 
 If you prefer building from source, install from a checkout instead:
 `./install.sh`, or `npm pack` plus
-`HEARTH_PKG=./sunshinelive83-hearth-*.tgz ./install.sh`.
+`HEARTH_PKG=./sunshinelife83-hearth-*.tgz ./install.sh`.
 
 Then initialize Hearth:
 
@@ -94,7 +94,7 @@ when interactive):
 Or run it without a global install:
 
 ```bash
-npx @sunshinelive83/hearth init
+npx @sunshinelife83/hearth init
 ```
 
 During setup, Hearth asks for:

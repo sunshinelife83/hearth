@@ -4,13 +4,13 @@
 #
 # From the registry:
 #   ./install.sh
-#   HEARTH_PKG=@sunshinelive83/hearth@1.0.0 ./install.sh   # pin a version
+#   HEARTH_PKG=@sunshinelife83/hearth@1.0.0 ./install.sh   # pin a version
 #
 # From a checkout (this directory):
 #   ./install.sh
 #
 # From a packed tarball:
-#   HEARTH_PKG=/path/to/sunshinelive83-hearth-1.0.0.tgz ./install.sh
+#   HEARTH_PKG=/path/to/sunshinelife83-hearth-1.0.0.tgz ./install.sh
 set -eu
 
 PKG="${HEARTH_PKG:-}"
@@ -29,12 +29,12 @@ need_node() {
 
 is_checkout() {
   [ -f ./package.json ] && [ -f ./src/cli.ts ] && [ -d ./src/dashboard ] \
-    && grep -q '"@sunshinelive83/hearth"' ./package.json 2>/dev/null
+    && grep -q '"@sunshinelife83/hearth"' ./package.json 2>/dev/null
 }
 
 install_from_checkout() {
   echo "Source checkout detected. Packing (this runs the build) ..."
-  rm -f ./sunshinelive83-hearth-*.tgz
+  rm -f ./sunshinelife83-hearth-*.tgz
   if command -v pnpm >/dev/null 2>&1; then
     pnpm install --frozen-lockfile >/dev/null 2>&1 || pnpm install
     pnpm pack >/dev/null 2>&1 || pnpm pack
@@ -42,7 +42,7 @@ install_from_checkout() {
     npm install --no-audit --no-fund >/dev/null 2>&1 || npm install --no-audit --no-fund
     npm pack >/dev/null 2>&1 || npm pack
   fi
-  TARBALL="$(ls -t ./sunshinelive83-hearth-*.tgz 2>/dev/null | head -n 1)"
+  TARBALL="$(ls -t ./sunshinelife83-hearth-*.tgz 2>/dev/null | head -n 1)"
   if [ -z "$TARBALL" ]; then
     echo "error: packing produced no tarball." >&2
     exit 1
@@ -77,8 +77,8 @@ if [ -z "$PKG" ]; then
   if is_checkout; then
     install_from_checkout
   else
-    echo "Installing @sunshinelive83/hearth from the npm registry ..."
-    PKG="@sunshinelive83/hearth"
+    echo "Installing @sunshinelife83/hearth from the npm registry ..."
+    PKG="@sunshinelife83/hearth"
     install_pkg
   fi
 else

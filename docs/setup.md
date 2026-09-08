@@ -21,7 +21,7 @@ or Hearth's relay-free direct exposure (own domain + TLS, see
 Run:
 
 ```bash
-npx @sunshinelive83/hearth init
+npx @sunshinelife83/hearth init
 ```
 
 The setup flow asks one question at a time.
@@ -106,14 +106,14 @@ A Coding Agents-only setup skips this section.
 Run:
 
 ```bash
-npx @sunshinelive83/hearth serve
+npx @sunshinelife83/hearth serve
 ```
 
 If your tunnel URL changes, update the persisted value before starting:
 
 ```bash
-npx @sunshinelive83/hearth config set publicBaseUrl https://hearth.example.com
-npx @sunshinelive83/hearth serve
+npx @sunshinelife83/hearth config set publicBaseUrl https://hearth.example.com
+npx @sunshinelife83/hearth serve
 ```
 
 Use the origin only — never append `/mcp` to `publicBaseUrl`. The client URL is
@@ -124,7 +124,7 @@ Use the origin only — never append `/mcp` to `publicBaseUrl`. The client URL i
 Run:
 
 ```bash
-npx @sunshinelive83/hearth connect
+npx @sunshinelife83/hearth connect
 ```
 
 It prints this PC's machine label, public `/mcp` URL, and copy-paste steps per
@@ -153,7 +153,7 @@ Keep `auth.json` private.
 Run:
 
 ```bash
-npx @sunshinelive83/hearth doctor
+npx @sunshinelife83/hearth doctor
 ```
 
 The doctor command reports the resolved config, Node version, Node ABI, platform,

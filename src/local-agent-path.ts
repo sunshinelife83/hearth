@@ -19,7 +19,7 @@ function isHearthNodeModulesBin(pathEntry: string): boolean {
 
   try {
     const packageInfo = JSON.parse(readFileSync(packageJson, "utf8")) as { name?: unknown };
-    return packageInfo.name === "@sunshinelive83/hearth";
+    return packageInfo.name === "@sunshinelife83/hearth";
   } catch {
     return false;
   }
