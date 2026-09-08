@@ -6,12 +6,12 @@ import { join } from "node:path";
 import { describe, it, before, after } from "node:test";
 import { writeTestHearthConfig } from "./test-support/config.test.js";
 
-describe("hearth id / expose commands", () => {
+describe("hearth id command", () => {
   let root = "";
   let env: NodeJS.ProcessEnv;
 
   before(() => {
-    root = mkdtempSync(join(tmpdir(), "hearth-expose-test-"));
+    root = mkdtempSync(join(tmpdir(), "hearth-id-test-"));
     mkdirSync(join(root, "project"), { recursive: true });
     env = writeTestHearthConfig(join(root, "config"), {
       workspaces: { allowedRoots: [join(root, "project")] },
@@ -36,12 +36,5 @@ describe("hearth id / expose commands", () => {
     assert.match(first.id, /^hearth-[0-9a-f]{12}$/);
     const second = JSON.parse(runCli("id")) as { id: string };
     assert.equal(second.id, first.id);
-  });
-
-  it("expose reports identity and next steps without a relay", () => {
-    const output = runCli("expose");
-    assert.match(output, /machine: hearth-[0-9a-f]{12}/);
-    assert.match(output, /status: (DIRECT|NOT directly reachable)/);
-    assert.match(output, /never a third party|relay/i);
   });
 });

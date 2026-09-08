@@ -19,16 +19,9 @@ export interface ExecutionConfig {
   requireSandboxForAutonomous: boolean;
 }
 
-export interface TlsConfig {
-  certFile: string | null;
-  keyFile: string | null;
-  acmeDir: string | null;
-}
-
 export interface TunnelConfig {
-  provider: "none" | "cloudflared";
-  hostname: string | null;
-  tunnelId: string | null;
+  provider: "none" | "ngrok";
+  domain: string | null;
 }
 
 export interface WorkspaceProfileConfig {
@@ -68,7 +61,6 @@ export interface ServerConfig {
   execution: ExecutionConfig;
   agentDir: string;
   logging: LoggingConfig;
-  tls: TlsConfig;
   tunnel: TunnelConfig;
 }
 
@@ -80,8 +72,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const publicBaseUrl = parsePublicBaseUrl(
     stored.server.publicBaseUrl ?? localPublicBaseUrl(host, port),
   );
-  const tunnelHostname = stored.tunnel.provider === "cloudflared" && stored.tunnel.hostname
-    ? parseTunnelHostname(stored.tunnel.hostname)
+  const tunnelDomain = stored.tunnel.provider === "ngrok" && stored.tunnel.domain
+    ? parseTunnelDomain(stored.tunnel.domain)
     : null;
   const derivedAllowedHosts = [
     "localhost",
@@ -89,7 +81,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     "::1",
     host,
     new URL(publicBaseUrl).hostname,
-    ...(tunnelHostname ? [tunnelHostname] : []),
+    ...(tunnelDomain ? [tunnelDomain] : []),
     ...stored.server.allowedHosts,
   ];
 
@@ -148,15 +140,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       ...stored.logging,
       trustProxy: stored.server.trustProxy,
     },
-    tls: {
-      certFile: stored.tls.certFile,
-      keyFile: stored.tls.keyFile,
-      acmeDir: stored.tls.acmeDir,
-    },
     tunnel: {
       provider: stored.tunnel.provider,
-      hostname: stored.tunnel.hostname,
-      tunnelId: stored.tunnel.tunnelId,
+      domain: stored.tunnel.domain,
     },
   };
 }
@@ -185,7 +171,7 @@ function parseRequiredSecret(value: string | undefined): string {
   return secret;
 }
 
-function parseTunnelHostname(value: string): string | null {
+function parseTunnelDomain(value: string): string | null {
   const trimmed = value.trim().replace(/^https?:\/\//i, "").split("/")[0]!.trim();
   if (!trimmed || /\s/.test(trimmed)) return null;
   return trimmed.toLowerCase();

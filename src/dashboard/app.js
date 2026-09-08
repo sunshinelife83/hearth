@@ -202,7 +202,7 @@ const renderers = {
           <div>Public MCP URL: <code>${esc(mcpUrl)}</code></div>
           <div class="muted">Local: <code>${esc(s.mcpEndpoint)}</code> · health: <code>${esc(s.healthEndpoint)}</code> · tool mode: <code>${esc(s.toolMode || "")}</code></div></div>
         <div class="card"><h3>ChatGPT</h3>
-          <ol><li>Keep <code>hearth serve</code> running; tunnel must proxy the whole origin, not only <code>/mcp</code>.</li>
+          <ol><li>Keep <code>hearth serve --ngrok</code> running.</li>
           <li>Add connector URL <code>${esc(mcpUrl)}</code>.</li>
           <li>Approve with the Owner password (<code>~/.hearth/auth.json</code>).</li></ol></div>
         <div class="card"><h3>Claude</h3>

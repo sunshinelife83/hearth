@@ -257,8 +257,36 @@ function parseJsoncConfig(source: string, filePath: string): HearthConfig {
   try {
     return hearthConfigSchema.parse(value);
   } catch (error) {
-    throw fileError("read", filePath, error);
+    throw fileError("read", filePath, withLegacyTunnelHint(value, error));
   }
+}
+
+/**
+ * One-time breaking migration aid: pre-ngrok configs carry a `tls` section
+ * and cloudflared-era `tunnel` keys that strict validation rejects. Detect
+ * them and tell the owner exactly how to migrate instead of dumping Zod.
+ */
+function withLegacyTunnelHint(value: unknown, error: unknown): unknown {
+  if (!(error instanceof z.ZodError)) return error;
+  if (typeof value !== "object" || value === null) return error;
+  const record = value as Record<string, unknown>;
+  const tunnel = record.tunnel as Record<string, unknown> | undefined;
+  const stale: string[] = [];
+  if ("tls" in record) stale.push("`tls`");
+  if (
+    tunnel !== null && typeof tunnel === "object" && tunnel !== undefined
+    && (tunnel.provider === "cloudflared" || "hostname" in tunnel || "tunnelId" in tunnel)
+  ) {
+    stale.push("cloudflared-era `tunnel` keys");
+  }
+  if (stale.length === 0) return error;
+  const reason = error instanceof Error ? error.message : String(error);
+  return new Error(
+    `${reason}\nYour config predates ngrok-only Hearth (stale ${stale.join(" and ")}). ` +
+    "To migrate: delete the `tls` section from your config.jsonc, re-run " +
+    "`hearth ngrok setup --domain <your-static-domain>` to recreate `tunnel`, " +
+    "and restart serve (auth.json is untouched).",
+  );
 }
 
 function serializeConfig(config: HearthConfig): string {

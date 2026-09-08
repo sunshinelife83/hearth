@@ -57,7 +57,7 @@ discover OAuth metadata and connect to the correct resource.
 The value should be the origin only:
 
 ```text
-https://your-tunnel-host.example.com
+https://xxx.ngrok-free.dev
 ```
 
 Do not include `/mcp` in `server.publicBaseUrl`.
@@ -82,36 +82,38 @@ Future direction: a per-device keypair whose private key never leaves the PC
 `hearth id`, `/healthz`, the dashboard, and approvals, so audit entries can
 bind to an unclonable key.
 
-## Managed Tunnel (cloudflared)
+## Managed Tunnel (ngrok)
 
-`hearth tunnel setup` provisions a named Cloudflare Tunnel on the PC. Trust
+`hearth ngrok setup` binds this PC to its static ngrok domain. Trust
 implications:
 
-- **Edge exposure is AI-endpoints-only.** The generated ingress serves `/mcp`,
-  OAuth (`/authorize`, `/token`, `/register`, `/revoke`), discovery, and
-  health. The dashboard, landing page, and everything else 404 at the edge.
-  The dashboard remains a localhost-only surface behind the Owner password.
-- **Credentials are local secrets.** The tunnel credentials JSON lives under
-  the state dir (`tunnels/cloudflared/`, `0600`). Anyone holding it can run a
-  connector for your hostname: guard it like `auth.json`, rotate by deleting
-  the remote tunnel and re-running setup.
+- **Only AI endpoints are reachable remotely.** Hearth refuses the landing
+  page and dashboard for tunnel-domain Hosts (404); `/mcp`, OAuth,
+  discovery, and health serve normally. The dashboard remains a
+  localhost-only surface behind the Owner password.
+- **The authtoken is ngrok's secret, not Hearth's.** It lives in ngrok's own
+  config (`ngrok config add-authtoken`); Hearth only saves the public domain.
+  Anyone holding your authtoken can tunnel as you: guard it, and rotate it
+  from the ngrok dashboard if exposed.
 - **Rate limiting sees real IPs.** Setup enables `server.trustProxy` so
-  `cf-connecting-ip` feeds rate-limit keys; without it every client would
+  `x-forwarded-for` feeds rate-limit keys; without it every client would
   share the tunnel's localhost key.
-- **Cloudflare sees TLS plaintext** between its edge and your origin by
-  design (that is how the tunnel works). Hearth's OAuth Owner approval still
+- **ngrok sees TLS plaintext** between its edge and your origin by design
+  (that is how the tunnel works). Hearth's OAuth Owner approval still
   gates the MCP endpoint.
+- **Free-tier interstitial.** ngrok shows a browser warning page on HTML
+  traffic; API calls pass through untouched.
 
 ## Tunnels
 
-Hearth does not manage tunnels. Your tunnel or reverse proxy should point to:
+ngrok is the only supported remote path (`hearth serve --ngrok`). The agent
+forwards to:
 
 ```text
 http://127.0.0.1:7176
 ```
 
-Prefer adding an identity-aware proxy in front of public tunnels. Hearth
-OAuth still protects the MCP endpoint, but the tunnel URL should not be
+Hearth OAuth still protects the MCP endpoint, but the tunnel URL should not be
 treated as a secret.
 
 ## Shell Access

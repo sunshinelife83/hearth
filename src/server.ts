@@ -24,7 +24,6 @@ import {
 import { registerAgentTools } from "./agent-tools.js";
 import { registerDashboard, dashboardDirectory } from "./dashboard.js";
 import { loadMachineIdentity } from "./machine-id.js";
-import { expandHomePath } from "./roots.js";
 import { registerTaskTools } from "./task-tools.js";
 import { registerContextTools } from "./context/context-tools.js";
 import { TaskStore } from "./task-store.js";
@@ -252,6 +251,23 @@ function requestLogFields(req: Request, config: ServerConfig): Record<string, un
 
 function assetBaseUrl(config: ServerConfig): string {
   return `${config.publicBaseUrl.replace(/\/+$/, "")}/mcp-app-assets`;
+}
+
+/**
+ * ngrok forwards the whole origin, but only AI endpoints may be reachable
+ * remotely. Refuse the landing page and dashboard when the request arrived
+ * through the configured tunnel domain; localhost stays fully available.
+ */
+function denyTunnelHost(config: ServerConfig) {
+  return (req: Request, res: Response, next: () => void): void => {
+    const domain = config.tunnel.provider === "ngrok" ? config.tunnel.domain?.toLowerCase() : null;
+    if (domain && (req.hostname ?? "").toLowerCase() === domain) {
+      logEvent(config.logging, "warn", "tunnel_remote_denied", { path: requestPath(req) });
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    next();
+  };
 }
 
 function uiManifestUrl(): URL {
@@ -1147,21 +1163,11 @@ export function createServer(
     });
   });
 
-  // ACME HTTP-01 challenge passthrough for relay-free TLS: serve only
-  // /.well-known/acme-challenge/* from the configured directory so certbot
-  // webroot mode works while the server runs. Nothing else is exposed here.
-  if (config.tls.acmeDir) {
-    const acmeDir = expandHomePath(config.tls.acmeDir);
-    app.use(
-      "/.well-known/acme-challenge",
-      express.static(acmeDir, { fallthrough: false, maxAge: 0 }),
-    );
-  }
-
-  app.get("/", (_req, res) => {
+  app.get("/", denyTunnelHost(config), (_req, res) => {
     res.sendFile("landing.html", { root: dashboardDirectory() });
   });
 
+  app.use("/dashboard", denyTunnelHost(config));
   registerDashboard(app, {
     config,
     workspaces,

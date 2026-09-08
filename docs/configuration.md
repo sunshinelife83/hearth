@@ -31,12 +31,11 @@ Run `hearth init` to create both files. `hearth config set publicBaseUrl
     "trustProxy": false,
   },
   "tunnel": {
-    // Managed per-PC tunnel. `hearth tunnel setup` writes this section,
-    // keeps publicBaseUrl in sync, and enables trustProxy. Credentials live
-    // in the state dir, never here.
+    // Managed per-PC ngrok tunnel. `hearth ngrok setup` writes this section,
+    // keeps publicBaseUrl in sync, and enables trustProxy. The ngrok
+    // authtoken lives in ngrok's own config, never here.
     "provider": "none",
-    "hostname": null,
-    "tunnelId": null,
+    "domain": null,
   },
   "workspaces": {
     "allowedRoots": ["~/personal", "~/work"],

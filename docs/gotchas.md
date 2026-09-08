@@ -69,68 +69,65 @@ Release starts run a native dependency check before launching.
 Use the origin for setup:
 
 ```text
-https://your-tunnel-host.example.com
+https://xxx.ngrok-free.dev
 ```
 
 Use the MCP endpoint in the client:
 
 ```text
-https://your-tunnel-host.example.com/mcp
+https://xxx.ngrok-free.dev/mcp
 ```
 
 If you saved the wrong value:
 
 ```bash
-npx @sunshinelife83/hearth config set publicBaseUrl https://your-tunnel-host.example.com
+npx @sunshinelife83/hearth config set publicBaseUrl https://xxx.ngrok-free.dev
 ```
 
 ## Reverse Proxy `/mcp` Returns 404
-Proxy the whole Hearth server from the root of your tunnel or reverse proxy.
-
-Do not mount only `/mcp`: some proxies strip a configured mount path before
-proxying to the local service, so a public `/mcp` request can otherwise arrive
-at Hearth as `/`. Hearth also needs OAuth routes outside `/mcp`, so serving
-the whole local origin is the correct setup.
+ngrok forwards the whole origin, so this only bites manual setups: never
+mount only `/mcp` in front of Hearth. Hearth needs its OAuth routes outside
+`/mcp`, and a path-scoped mount can strip `/mcp` before the request arrives
+(arriving as `/` and failing).
 
 ## Tunnel URL Changed
 
-Temporary tunnels often change URLs between runs.
-
-Update the configured URL:
-
-```bash
-npx @sunshinelife83/hearth config set publicBaseUrl https://new-tunnel.example.com
-```
-
-For a stable URL, use a managed tunnel instead of a temporary one:
+It should not: the managed ngrok domain is static. If the served domain and
+the saved one disagree, something replaced your agent or domain:
 
 ```bash
-npx @sunshinelife83/hearth tunnel setup --hostname hearth.example.com
+npx @sunshinelife83/hearth ngrok status
+npx @sunshinelife83/hearth doctor
 ```
 
-## Managed Tunnel Problems
+If you intentionally moved to a new domain, resync and restart:
 
-Run `hearth tunnel status` and `hearth doctor` first; most answers are there.
+```bash
+npx @sunshinelife83/hearth ngrok setup --domain https://new-domain.ngrok-free.dev
+npx @sunshinelife83/hearth serve --ngrok
+```
 
-- **`cloudflared was not found`**: install the binary (see `hearth tunnel setup`
+## Managed ngrok Problems
+
+Run `hearth ngrok status` and `hearth doctor` first; most answers are there.
+
+- **`ngrok was not found`**: install the binary (see `hearth ngrok setup`
   output), then re-run setup.
-- **Not logged in**: run `cloudflared tunnel login` once, then re-run setup.
-- **`tunnel create` succeeds but credentials are missing**: copy the
-  `<tunnel-id>.json` file next to the tunnel before re-running; Cloudflare
-  cannot re-issue it.
-- **Name taken without local credentials**: delete the remote tunnel
-  (`cloudflared tunnel delete <name>`), copy its credentials into place, or
-  pick another name with `--name`.
-- **Cloudflare 1033 / hostname unreachable**: the tunnel connector is down.
-  Check `cloudflared tunnel info <name>` for zero connections and restart
-  `hearth serve`. After a Cloudflare incident, restart the connector.
-- **Every route 404s though Hearth is healthy**: the edge catch-all is
-  shadowing real rules. Re-run `hearth tunnel setup` to regenerate the
-  ingress file (Hearth always writes `http_status:404` last).
-- **Hostname resolves but Hearth rejects with 403**: the tunnel hostname and
-  `server.publicBaseUrl` disagree. Re-run setup for the right hostname.
-- **`/dashboard` unreachable remotely**: intentional. The managed ingress only
-  exposes AI endpoints; the dashboard stays localhost-only.
+- **No authtoken**: run `ngrok config add-authtoken <your-token>` once, then
+  re-run setup.
+- **Agent serving a different domain than saved**: another agent (or account)
+  is running. `serve --ngrok` refuses to start in this state — stop the other
+  agent, then restart. Never silence this check: serving under a drifting URL
+  invalidates OAuth sessions.
+- **Hostname unreachable**: the ngrok agent is down. Restart
+  `hearth serve --ngrok` and check `hearth ngrok status`.
+- **Hostname resolves but Hearth rejects with 403**: the tunnel domain and
+  `server.publicBaseUrl` disagree. Re-run setup for the right domain.
+- **Owner approval page shows an ngrok warning first**: expected on the free
+  tier — click through the interstitial once, then approve normally. API
+  calls are unaffected.
+- **`/dashboard` unreachable remotely**: intentional. Remote dashboard and
+  landing requests 404 by Host; the dashboard stays localhost-only.
 
 ## Host Header Or 403 Problems
 
@@ -142,8 +139,8 @@ Run:
 npx @sunshinelife83/hearth doctor
 ```
 
-Confirm the public URL hostname appears in allowed hosts. If you changed tunnel
-URLs, update `publicBaseUrl`.
+Confirm the public URL hostname appears in allowed hosts. If you replaced the
+managed domain, resync with `hearth ngrok setup`.
 
 For intentional local debugging only, set `server.allowedHosts` to `["*"]` in
 `~/.hearth/config.jsonc`.

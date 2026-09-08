@@ -11,15 +11,12 @@ This guide covers ChatGPT and Coding Agents using Hearth with local projects.
 - a public HTTPS URL that forwards to the local Hearth server, only when
   ChatGPT will connect
 
-ChatGPT users need a public HTTPS URL forwarding to the local server. Three
-ways to get one:
+ChatGPT users need a public HTTPS URL forwarding to the local server. The
+supported way is the managed ngrok tunnel:
 
-1. **Managed per-PC tunnel (recommended):** `hearth tunnel setup` provisions
-   a named Cloudflare Tunnel on this PC with a stable hostname — see
+1. **Managed per-PC tunnel (the only remote path):** `hearth ngrok setup`
+   saves this PC's static domain — see
    [Managed Tunnel](#managed-tunnel-every-pc-is-server-url-and-tunnel).
-2. Their own reverse proxy or tunnel.
-3. Hearth's relay-free direct exposure (own domain + TLS, see
-   `hearth expose`).
 
 ## Install And Configure
 
@@ -76,28 +73,18 @@ These commands do not require `hearth serve`.
 
 ### Connect ChatGPT
 
-Setup only asks for a public URL if you selected ChatGPT. Start your tunnel or
-reverse proxy first and point it at:
+Setup only asks for a public URL if you selected ChatGPT. Enter your static
+ngrok domain as the public origin without `/mcp` (run
+`hearth ngrok setup` first if you have not saved one yet):
 
 ```text
-http://127.0.0.1:7176
-```
-
-Proxy the whole Hearth server from the root path of your tunnel or reverse
-proxy — never mount only `/mcp`. Hearth also serves OAuth discovery and
-authorization routes outside `/mcp`, and a path-scoped mount can strip `/mcp`
-before the request reaches Hearth (arriving as `/` and failing).
-
-Enter the public origin without `/mcp`:
-
-```text
-https://your-tunnel-host.example.com
+https://xxx.ngrok-free.dev
 ```
 
 Configure the MCP client with the full MCP endpoint:
 
 ```text
-https://your-tunnel-host.example.com/mcp
+https://xxx.ngrok-free.dev/mcp
 ```
 
 Protocol compatibility is automatic. Hearth serves MCP 2026-07-28 requests
@@ -111,14 +98,15 @@ A Coding Agents-only setup skips this section.
 Run:
 
 ```bash
-npx @sunshinelife83/hearth serve
+npx @sunshinelife83/hearth serve --ngrok
 ```
 
-If your tunnel URL changes, update the persisted value before starting:
+The static domain never changes, so no URL resync is ever needed. If you
+replace the domain, update the persisted value before starting:
 
 ```bash
-npx @sunshinelife83/hearth config set publicBaseUrl https://hearth.example.com
-npx @sunshinelife83/hearth serve
+npx @sunshinelife83/hearth ngrok setup --domain https://new-domain.ngrok-free.dev
+npx @sunshinelife83/hearth serve --ngrok
 ```
 
 Use the origin only — never append `/mcp` to `publicBaseUrl`. The client URL is
@@ -126,35 +114,39 @@ Use the origin only — never append `/mcp` to `publicBaseUrl`. The client URL i
 
 ## Managed Tunnel: Every PC Is Server, URL, And Tunnel
 
-`hearth tunnel` provisions a named Cloudflare Tunnel on the PC it runs on, so
-`hearth serve` alone is server + stable public URL + tunnel. No second
-terminal, no pasted tunnel URLs, no hostname churn on restart.
+`hearth ngrok setup` binds this PC to its static ngrok domain, so
+`hearth serve --ngrok` alone is server + stable public URL + tunnel. No
+second terminal, no pasted tunnel URLs, no hostname churn on restart.
 
 Prerequisites (once per PC):
 
-- `cloudflared` installed (`brew install cloudflared`, the Linux package for
-  your distro, or `winget install --id Cloudflare.cloudflared`)
-- `cloudflared tunnel login` completed once (browser session)
-- a Cloudflare zone for the hostname you will serve
+- an ngrok account (free is enough — every account gets one stable dev
+  domain such as `xxx.ngrok-free.dev`)
+- `ngrok` installed (`brew install ngrok`, the Linux package for your
+  distro, or `winget install --id Ngrok.ngrok`)
+- `ngrok config add-authtoken <your-token>` completed once (token from
+  https://dashboard.ngrok.com/get-started/your-authtoken)
 
 Then:
 
 ```bash
-hearth tunnel setup --hostname hearth.example.com
-hearth serve
-hearth tunnel status
+hearth ngrok setup --domain xxx.ngrok-free.dev
+hearth serve --ngrok
+hearth ngrok status
 ```
 
-What setup does: creates (or reuses) a tunnel named after this PC's machine
-id, routes the hostname to it, writes an ingress file exposing only the AI
-endpoints (`/mcp`, OAuth, discovery, health — the dashboard stays
-localhost-only behind an edge 404), stores credentials under the state dir at
-`0600`, and syncs `server.publicBaseUrl` plus `server.trustProxy`. Scripted
-setups can pass `--yes` (requires `--hostname`).
+What setup does: saves the static domain, syncs `server.publicBaseUrl`, and
+enables `server.trustProxy` so rate limits see real client IPs. Your
+authtoken stays in ngrok's own config — Hearth never stores it. Scripted
+setups can pass `--yes` (requires `--domain`).
 
-`hearth serve` supervises the tunnel child and fails fast if the tunnel is
-misconfigured instead of serving locally-but-dark. `hearth doctor` checks the
-binary, credentials, ingress file, and hostname match.
+`hearth serve --ngrok` supervises the ngrok agent and fails fast if the live
+domain drifts from the saved one, instead of serving locally-but-dark.
+`hearth doctor` checks the binary, auth, domain match, and child liveness.
+Plain `hearth serve` stays local-only.
+
+Note: ngrok free shows a browser interstitial page on HTML traffic. API calls
+are unaffected; the Owner approval page needs one click-through.
 
 ## Connect A Host (ChatGPT / Claude / Generic)
 

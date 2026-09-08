@@ -81,7 +81,7 @@ hearth init
 Non-interactive (scripts, second machine):
 
 ```bash
-hearth init --yes --use both --roots ~/personal,~/work --public-url https://your-tunnel-host.example.com
+hearth init --yes --use both --roots ~/personal,~/work --public-url https://xxx.ngrok-free.dev
 ```
 
 Or one line from a checkout (checks Node, packs, installs, then runs setup
@@ -103,7 +103,8 @@ During setup, Hearth asks for:
 - which Coding Agents Hearth may use
 
 If you select ChatGPT, setup also asks which local project folders it may open
-and for your public HTTPS base URL from a tunnel or reverse proxy you control.
+and for your public HTTPS base URL — your static ngrok domain (see
+[Managed Tunnel](#managed-tunnel) below).
 A Coding Agents-only setup asks
 neither question: local commands use the current Git project, or the current
 directory outside a repository.
@@ -111,11 +112,11 @@ directory outside a repository.
 Use the public origin without `/mcp` during setup:
 
 ```text
-https://your-tunnel-host.example.com
+https://xxx.ngrok-free.dev
 ```
 
 You will configure your MCP client with the public `/mcp` URL after setup.
-Run `hearth serve` when using ChatGPT. For Coding Agents, setup prints a
+Run `hearth serve --ngrok` when using ChatGPT. For Coding Agents, setup prints a
 `skills` command and lets the Skills CLI handle installation.
 
 When the client connects, Hearth opens an Owner password approval page. Enter
@@ -140,10 +141,10 @@ The default local endpoint is:
 http://127.0.0.1:7176/mcp
 ```
 
-Most users should connect through a public HTTPS tunnel:
+Most users should connect through the managed ngrok tunnel:
 
 ```text
-https://your-tunnel-host.example.com/mcp
+https://xxx.ngrok-free.dev/mcp
 ```
 
 ChatGPT, Claude, and generic MCP clients all use the same `/mcp` endpoint.
@@ -191,24 +192,24 @@ The dashboard performs no privileged execution of its own: it shows the same
 policy-gated state the MCP surface sees, and agents/tasks are still driven
 from your MCP client.
 
-## Direct Exposure Without a Relay
+## Managed Tunnel
 
-No software can give your PC a public URL with zero outside help: ChatGPT must
-reach a public IP over valid HTTPS. What Hearth removes is the *relay
-middleman*. If you have a domain and an inbound route to this machine:
+Hearth exposes this PC through ngrok — the only remote-access path. Each PC
+gets its stable ngrok domain, and `hearth serve --ngrok` is server, URL, and
+tunnel in one command:
 
 ```bash
-hearth expose    # reports this PC's identity and exactly what's missing
-hearth id        # stable per-PC identity (hearth-xxxx...)
+ngrok config add-authtoken <your-token>   # once; token from dashboard.ngrok.com
+hearth ngrok setup --domain xxx.ngrok-free.dev
+hearth serve --ngrok
+hearth ngrok status    # health: binary, auth, live domain match
+hearth id              # stable per-PC identity (hearth-xxxx...)
 ```
 
-Then: point your domain at the machine, forward TCP 443 (and 80 for issuance),
-issue a certificate with certbot webroot against `tls.acmeDir`, set
-`tls.certFile`/`tls.keyFile`, run `hearth config set publicBaseUrl
-https://your-domain`, and restart serve. Hearth terminates TLS itself and
-serves the ACME challenge path. Without an inbound route + domain, traffic
-needs *some* relay — run your own (e.g. on your VPS), never one you don't
-control.
+Only AI endpoints (`/mcp`, OAuth, discovery, health) are reachable through
+the tunnel: the landing page and dashboard 404 remotely by Host and stay
+localhost-only. `hearth doctor` checks the binary, auth, domain match, and
+child liveness.
 
 ## Mental Model
 
@@ -220,11 +221,10 @@ connected client like a trusted coding partner with access to your machine.
 
 For a normal ChatGPT coding session:
 
-1. Start your tunnel.
-2. Run `hearth serve`.
-3. Connect the MCP client to your public `/mcp` URL.
-4. Approve the connection with the Owner password.
-5. Ask ChatGPT to open a project inside one of your allowed roots.
+1. Run `hearth serve --ngrok`.
+2. Connect the MCP client to your public `/mcp` URL.
+3. Approve the connection with the Owner password.
+4. Ask ChatGPT to open a project inside one of your allowed roots.
 
 ## Platform Support
 

@@ -15,7 +15,7 @@ type SectionOverrides = {
   skills?: Partial<HearthConfig["skills"]>;
   subagents?: HearthConfig["subagents"];
   fleet?: FleetConfig;
-  tls?: Partial<HearthConfig["tls"]>;
+  tunnel?: Partial<HearthConfig["tunnel"]>;
   logging?: Partial<HearthConfig["logging"]>;
   oauth?: Partial<HearthConfig["oauth"]>;
 };
@@ -37,7 +37,7 @@ export function writeTestHearthConfig(
     skills: { ...defaults.skills, ...overrides.skills },
     subagents: overrides.subagents ?? defaults.subagents,
     fleet: overrides.fleet ?? defaults.fleet,
-    tls: { ...defaults.tls, ...overrides.tls },
+    tunnel: { ...defaults.tunnel, ...overrides.tunnel },
     logging: { ...defaults.logging, ...overrides.logging },
     oauth: { ...defaults.oauth, ...overrides.oauth },
   }, env);

@@ -220,3 +220,25 @@ async function migrateInChildProcess(
     });
   });
 }
+
+{
+  // Pre-ngrok configs (tls section, cloudflared tunnel keys) fail with a
+  // migration hint instead of a raw schema dump.
+  withConfigDir((configDir, env) => {
+    writeFileSync(join(configDir, "config.jsonc"), JSON.stringify({
+      configVersion: 1,
+      server: { host: "127.0.0.1", port: 7176, publicBaseUrl: "https://x.example.com" },
+      tls: { certFile: null, keyFile: null, acmeDir: null },
+      tunnel: { provider: "cloudflared", hostname: "x.example.com", tunnelId: "abc" },
+    }));
+    writeFileSync(join(configDir, "auth.json"), JSON.stringify({ ownerToken: "test-owner-token-long-enough" }));
+    assert.throws(
+      () => loadHearthFiles(env),
+      (error: unknown) => error instanceof Error
+        && error.message.includes("predates ngrok-only Hearth")
+        && error.message.includes("hearth ngrok setup"),
+    );
+  });
+}
+
+console.log("legacy tunnel migration tests passed");

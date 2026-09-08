@@ -105,9 +105,6 @@ export function logEvent(
 
 export function requestIp(req: Request, trustProxy: boolean): string | undefined {
   if (trustProxy) {
-    const cfConnectingIp = firstHeaderValue(req.header("cf-connecting-ip"));
-    if (cfConnectingIp) return cfConnectingIp;
-
     const forwardedFor = firstHeaderValue(req.header("x-forwarded-for"));
     if (forwardedFor) return forwardedFor;
   }

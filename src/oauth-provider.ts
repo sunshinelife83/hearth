@@ -20,7 +20,7 @@ export interface OAuthConfig {
   refreshTokenTtlSeconds: number;
   scopes: string[];
   allowedRedirectHosts: string[];
-  /** Honor proxy headers (cf-connecting-ip / x-forwarded-for) for rate-limit keys. */
+  /** Honor the proxy header (x-forwarded-for) for rate-limit keys. Required behind ngrok. */
   trustProxy: boolean;
 }
 

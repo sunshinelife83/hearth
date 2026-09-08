@@ -19,29 +19,16 @@ const serverConfigSchema = z.object({
   issuerMode: z.enum(["derived", "local"]).default("derived"),
 }).strict().prefault({});
 
-const tlsConfigSchema = z.object({
-  // Native TLS for relay-free direct exposure: when both are set, `serve`
-  // terminates HTTPS itself (e.g. behind your own domain + port forward).
-  // Leave null when running behind localhost or a tunnel that terminates TLS.
-  certFile: z.string().trim().min(1).nullable().default(null),
-  keyFile: z.string().trim().min(1).nullable().default(null),
-  // Directory served (read-only) at /.well-known/acme-challenge/ so certbot
-  // webroot mode can provision certificates while the server runs.
-  acmeDir: z.string().trim().min(1).nullable().default(null),
-}).strict().prefault({});
-
 const tunnelConfigSchema = z.object({
-  // Managed per-PC tunnel. "none" keeps today's behavior (own reverse
-  // proxy or direct exposure). "cloudflared" lets `hearth tunnel setup`
-  // provision a named Cloudflare Tunnel on this PC and `hearth serve`
-  // supervise it, so one command is server + URL + tunnel.
-  provider: z.enum(["none", "cloudflared"]).default("none"),
-  // Public hostname served through the tunnel (origin only, no path).
-  // `hearth tunnel setup` sets this and keeps server.publicBaseUrl in sync.
-  hostname: z.string().trim().min(1).nullable().default(null),
-  // Cloudflare tunnel UUID. Credentials live in the state dir
-  // (stateDir/tunnels/cloudflared/<tunnelId>.json, 0600), never in config.
-  tunnelId: z.string().trim().min(1).nullable().default(null),
+  // Managed per-PC tunnel. "none" serves locally only. "ngrok" lets
+  // `hearth ngrok setup` save this PC's static ngrok domain and
+  // `hearth serve --ngrok` supervise the agent, so one command is
+  // server + URL + tunnel.
+  provider: z.enum(["none", "ngrok"]).default("none"),
+  // Static ngrok domain for this PC (e.g. xxx.ngrok-free.dev).
+  // `hearth ngrok setup` sets this and keeps server.publicBaseUrl in sync.
+  // The ngrok authtoken itself lives in ngrok's own config, never here.
+  domain: z.string().trim().min(1).nullable().default(null),
 }).strict().prefault({});
 
 const workspaceProfileSchema = z.object({
@@ -146,8 +133,7 @@ export const hearthConfigSchema = z.object({
   fleet: fleetConfigSchema.default({ lanes: {} }),
   execution: executionConfigSchema,
   logging: loggingConfigSchema,
-  tls: tlsConfigSchema.default({ certFile: null, keyFile: null, acmeDir: null }),
-  tunnel: tunnelConfigSchema.default({ provider: "none", hostname: null, tunnelId: null }),
+  tunnel: tunnelConfigSchema.default({ provider: "none", domain: null }),
   oauth: oauthConfigSchema,
 }).strict();
 
