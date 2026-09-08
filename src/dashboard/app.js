@@ -198,7 +198,7 @@ const renderers = {
       const mcpUrl = s.publicMcpUrl || `${s.publicBaseUrl}/mcp`;
       el.innerHTML = `
         <div class="card"><h3>This PC</h3>
-          <div>Machine <code>${esc(s.machineId || "unknown")}</code> — do not reuse this public URL on another PC.</div>
+          <div>Machine <code>${esc(s.machineId || "unknown")}</code> (diagnostic label — keep one public URL per PC; the label does not prevent cloning).</div>
           <div>Public MCP URL: <code>${esc(mcpUrl)}</code></div>
           <div class="muted">Local: <code>${esc(s.mcpEndpoint)}</code> · health: <code>${esc(s.healthEndpoint)}</code> · tool mode: <code>${esc(s.toolMode || "")}</code></div></div>
         <div class="card"><h3>ChatGPT</h3>

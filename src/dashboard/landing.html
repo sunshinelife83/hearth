@@ -35,7 +35,7 @@ hearth serve</pre>
 
   <div class="card">
     <h3>Connect</h3>
-    <p>Each PC has a stable <code>hearth-xxxx</code> identity (<code>hearth id</code>). Do not reuse one public URL on two PCs — OAuth tokens are bound to that machine's resource URL.</p>
+    <p>Each PC has a stable <code>hearth-xxxx</code> diagnostic label (<code>hearth id</code>). Keep one public URL per PC — OAuth tokens are bound to that machine's resource URL. The label is not a security boundary: copying the state directory copies the identity.</p>
     <ul>
       <li><strong>ChatGPT:</strong> add the public <code>/mcp</code> URL as a connector, approve with the Owner password.</li>
       <li><strong>Claude:</strong> same public <code>/mcp</code> URL; ensure <code>oauth.allowedRedirectHosts</code> includes <code>claude.ai</code>. Or <code>hearth token create claude-local</code> + <code>hearth mcp</code> for local stdio.</li>

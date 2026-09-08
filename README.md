@@ -130,8 +130,9 @@ Keep that password private.
 ## Connect Your MCP Client
 
 Run `hearth connect` for this PC's exact steps (also in the dashboard Connect
-tab). Each PC has a stable `hearth-xxxx` id (`hearth id`); do not reuse one
-public URL on two PCs.
+tab). Each PC has a stable `hearth-xxxx` diagnostic label (`hearth id` — it
+helps recognize the PC but does not prevent cloning); keep one public URL per
+PC as operational hygiene.
 
 The default local endpoint is:
 

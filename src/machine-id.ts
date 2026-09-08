@@ -4,13 +4,20 @@ import { hostname, platform, arch } from "node:os";
 import { join } from "node:path";
 
 /**
- * Stable per-PC identity for relay-free exposure.
+ * Stable per-PC diagnostic identifier.
  *
- * Each machine running Hearth owns an unguessable stable id persisted in
- * stateDir (`machine.json`). It is NOT an address: reachability still needs
- * either a direct inbound route (own domain + port forward + TLS, see
- * `hearth expose`) or a relay the user runs themselves. The id lets the
- * owner recognize this PC in dashboards, approvals, and audit logs.
+ * Each machine running Hearth owns a random stable id persisted in
+ * stateDir (`machine.json`). It is a diagnostic label only, NOT a security
+ * boundary: anyone who copies stateDir copies the identity, so it cannot
+ * prove which physical machine answered, and it cannot prevent URL reuse or
+ * cloning. Reachability still needs either a direct inbound route (own
+ * domain + port forward + TLS, see `hearth expose`) or a relay the user
+ * runs themselves. The id lets the owner recognize this PC in banners,
+ * dashboards, approvals, and audit logs.
+ *
+ * Future direction: replace this shared-secret-free label with a device
+ * keypair (private key stays on the PC at 0600, public key identifies the
+ * device), so approvals and audit entries can bind to an unclonable key.
  */
 
 export interface MachineIdentity {

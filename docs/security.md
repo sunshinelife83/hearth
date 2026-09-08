@@ -65,6 +65,23 @@ Do not include `/mcp` in `server.publicBaseUrl`.
 By default, Hearth derives allowed Host headers from the local host and public
 URL. Put `"*"` in `server.allowedHosts` only for intentional local debugging.
 
+## Machine Identity Is Diagnostic, Not A Security Boundary
+
+`hearth id` prints a stable random label (`hearth-xxxx`) stored in the state
+directory (`machine.json`). It helps the owner recognize which PC a banner,
+dashboard, approval page, `/healthz` response, or log line came from.
+
+It does not authenticate the machine: copying the state directory copies the
+identity, so it cannot prove which physical PC answered, cannot prevent URL
+reuse across PCs, and cannot stop cloning. Keep one public URL per PC as
+operational hygiene, and rely on the Owner password plus OAuth tokens — not
+the label — for access decisions.
+
+Future direction: a per-device keypair whose private key never leaves the PC
+(`0600` in the state directory) and whose public fingerprint is shown in
+`hearth id`, `/healthz`, the dashboard, and approvals, so audit entries can
+bind to an unclonable key.
+
 ## Tunnels
 
 Hearth does not manage tunnels. Your tunnel or reverse proxy should point to:

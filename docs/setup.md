@@ -127,10 +127,12 @@ Run:
 npx @waishnav/hearth connect
 ```
 
-It prints this PC's machine id, public `/mcp` URL, and copy-paste steps per
+It prints this PC's machine label, public `/mcp` URL, and copy-paste steps per
 host. Use `hearth connect chatgpt|claude|generic` for one host. The dashboard
-Connect tab shows the same. Do not reuse one public URL on two PCs: OAuth
-tokens are bound to that machine's resource URL and Owner password.
+Connect tab shows the same. Keep one public URL per PC: OAuth
+tokens are bound to that machine's resource URL and Owner password. The
+machine label is diagnostic only and does not prevent cloning (see
+`docs/security.md`).
 
 ## Approve The Client
 

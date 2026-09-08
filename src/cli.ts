@@ -512,7 +512,7 @@ function logServeBanner(
   const publicMcpUrl = new URL("/mcp", config.publicBaseUrl).toString();
   console.log(`hearth listening on ${scheme}://${config.host}:${config.port}/mcp`);
   console.log(`public MCP URL: ${publicMcpUrl}`);
-  console.log(`machine: ${machineId} (hearth id — this URL must be unique to this PC)`);
+  console.log(`machine: ${machineId} (hearth id, diagnostic label only — not a security boundary)`);
   console.log(`dashboard: ${scheme}://${config.host}:${config.port}/dashboard`);
   console.log(`public base url: ${config.publicBaseUrl}`);
   console.log(`allowed roots: ${config.allowedRoots.join(", ")}`);
@@ -700,6 +700,7 @@ async function runConnect(args: string[]): Promise<void> {
     );
   }
   lines.push("Do not reuse this public URL on another PC: OAuth tokens are bound to this machine's resource URL and owner password.");
+  lines.push("The machine id is a diagnostic label, not a security boundary: copying stateDir copies the identity, so it cannot prove which PC answered or prevent cloning.");
   console.log(lines.join("\n"));
 }
 
@@ -776,7 +777,7 @@ async function runExpose(): Promise<void> {
     `machine: ${identity.id} (${identity.hostname}, ${identity.platform}/${identity.arch})`,
     `bind: ${config.host}:${config.port}  (hearth serve)`,
     `public base url: ${config.publicBaseUrl}`,
-    `public MCP URL (unique to this PC — do not reuse on another machine): ${new URL("/mcp", config.publicBaseUrl).toString()}`,
+    `public MCP URL (keep one URL per PC — reusing it elsewhere splits approvals and audit): ${new URL("/mcp", config.publicBaseUrl).toString()}`,
     `public IP seen from here: ${publicIp ?? "unknown (dig unavailable or blocked)"}`,
     `native TLS: ${!certSet ? "off (tls.certFile/tls.keyFile unset)" : certPresent ? "cert + key present" : "CONFIGURED BUT FILES MISSING"}`,
     `ACME webroot: ${config.tls.acmeDir ?? "unset"}`,
