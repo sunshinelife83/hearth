@@ -20,8 +20,8 @@ import { LocalAgentRuntimePool } from "./local-agent-runtime-pool.js";
 import { LocalAgentStore } from "./local-agent-store.js";
 import type { SubagentsConfig } from "./local-agent-config.js";
 
-const root = await mkdtemp(join(tmpdir(), "devspace-agent-manager-test-"));
-const directRoot = await mkdtemp(join(tmpdir(), "devspace-direct-agent-manager-test-"));
+const root = await mkdtemp(join(tmpdir(), "hearth-agent-manager-test-"));
+const directRoot = await mkdtemp(join(tmpdir(), "hearth-direct-agent-manager-test-"));
 const stateDir = join(root, "state");
 const scope = { workspaceId: "ws_test", workspaceRoot: root };
 const profile: LocalAgentProfile = {
@@ -219,7 +219,7 @@ if (mismatchedGet.isErr()) assert.equal(mismatchedGet.error.code, "WORKSPACE_MIS
 unwrap(manager.reconcileActiveRuns());
 assert.equal(getRecord(stale.id).status, "error");
 assert.equal(getRecord(stale.id).latestResponse, "previous response");
-assert.equal(getRecord(stale.id).error, "DevSpace restarted while this agent turn was running.");
+assert.equal(getRecord(stale.id).error, "Hearth restarted while this agent turn was running.");
 assert.equal(getRecord(stale.id).errorCode, "DAEMON_UNAVAILABLE");
 assert.equal(getRecord(stale.id).errorRetryable, true);
 

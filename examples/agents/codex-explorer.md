@@ -1,5 +1,5 @@
 ---
-schema: devspace-agent/v1
+schema: hearth-agent/v1
 name: codex-explorer
 description: Read-only profile for bounded codebase questions, architecture tracing, and risk discovery.
 provider: codex

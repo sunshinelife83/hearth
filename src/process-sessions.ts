@@ -67,6 +67,8 @@ interface ProcessSession {
   exitPromise: Promise<void>;
   resolveExit: () => void;
   cleanupTimer?: NodeJS.Timeout;
+  /** OS pid journaled for orphan reaping; cleared when the journal entry is removed. */
+  journalPid?: number;
 }
 
 interface ProcessSessionManagerOptions {
@@ -76,6 +78,8 @@ interface ProcessSessionManagerOptions {
   environment?: EnvironmentFilter;
   /** Optional OS-sandbox wrapper applied when a start request asks for it. */
   commandWrapper?: (shell: ShellCommand, context: { workspaceRoot: string }) => ShellCommand;
+  /** When set, live processes are journaled here for boot-time orphan reaping. */
+  journalDir?: string;
 }
 
 function boundedInteger(value: number | undefined, fallback: number, maximum: number): number {
@@ -111,11 +115,11 @@ function processEnvironment(
     CODEX_CI: "1",
     LANG: process.env.LANG ?? "C.UTF-8",
     LC_ALL: process.env.LC_ALL ?? "C.UTF-8",
-    // Marks shells spawned by DevSpace tools so CLI helpers invoked from a
+    // Marks shells spawned by Hearth tools so CLI helpers invoked from a
     // model-run command cannot bypass workspace scoping.
-    DEVSPACE_ORIGIN: "devspace-shell",
-    ...(input?.workspaceId ? { DEVSPACE_WORKSPACE_ID: input.workspaceId } : {}),
-    ...(input?.workspaceRoot ? { DEVSPACE_WORKSPACE_ROOT: input.workspaceRoot } : {}),
+    HEARTH_ORIGIN: "hearth-shell",
+    ...(input?.workspaceId ? { HEARTH_WORKSPACE_ID: input.workspaceId } : {}),
+    ...(input?.workspaceRoot ? { HEARTH_WORKSPACE_ROOT: input.workspaceRoot } : {}),
   };
 }
 
@@ -228,6 +232,7 @@ export class ProcessSessionManager {
   private readonly completedSessionTtlMs: number;
   private readonly environment: EnvironmentFilter;
   private readonly commandWrapper?: (shell: ShellCommand, context: { workspaceRoot: string }) => ShellCommand;
+  private readonly journalDir?: string;
   private nextSessionId = 1;
 
   constructor(options: ProcessSessionManagerOptions = {}) {
@@ -235,6 +240,7 @@ export class ProcessSessionManager {
     this.completedSessionTtlMs = options.completedSessionTtlMs ?? COMPLETED_SESSION_TTL_MS;
     this.environment = options.environment ?? { allowAll: true };
     this.commandWrapper = options.commandWrapper;
+    this.journalDir = options.journalDir;
   }
 
   async start(input: StartCommandInput): Promise<ProcessSnapshot> {
@@ -353,7 +359,11 @@ export class ProcessSessionManager {
   private startPipe(session: ProcessSession, input: StartCommandInput): void {
     const shell = this.resolveShell(input);
     const detached = process.platform !== "win32";
-    const child = spawn(input.command, {
+    // Spawn the resolved (possibly sandbox-wrapped) shell directly. Node's
+    // `shell:` spawn option would append `-c <command>` to whatever executable
+    // it is given, which breaks wrappers like `bwrap` ("Unknown option -c").
+    // resolveShellCommand already embeds the command in shell.args.
+    const child = spawn(shell.executable, shell.args, {
       cwd: input.cwd,
       env: processEnvironment(
         filterChildEnvironment(process.env, this.environment, { workspaceId: input.workspaceId }),
@@ -365,7 +375,6 @@ export class ProcessSessionManager {
       stdio: "pipe",
       windowsHide: true,
       detached,
-      shell: shell.executable,
     });
 
     session.process = {
@@ -377,6 +386,7 @@ export class ProcessSessionManager {
     child.stderr.on("data", (data: Buffer) => this.append(session, data.toString("utf8")));
     child.on("error", (error) => this.append(session, `${error.message}\n`));
     child.on("close", (code, signal) => this.finish(session, code ?? undefined, signal ?? undefined));
+    this.journal(session, input, child.pid);
   }
 
   private async startPty(session: ProcessSession, input: StartCommandInput): Promise<void> {
@@ -416,6 +426,7 @@ export class ProcessSessionManager {
     pty.onExit(({ exitCode, signal }) => {
       this.finish(session, exitCode, signal === 0 ? undefined : String(signal));
     });
+    this.journal(session, input, pty.pid);
   }
 
   private finish(session: ProcessSession, exitCode?: number, signal?: string): void {
@@ -424,6 +435,7 @@ export class ProcessSessionManager {
     session.exitCode = exitCode;
     session.signal = signal;
     session.resolveExit();
+    this.unjournal(session);
     session.cleanupTimer = setTimeout(
       () => this.sessions.delete(session.id),
       this.completedSessionTtlMs,
@@ -462,7 +474,33 @@ export class ProcessSessionManager {
 
   private removeSession(sessionId: number): void {
     const session = this.sessions.get(sessionId);
+    this.unjournal(session);
     if (session?.cleanupTimer) clearTimeout(session.cleanupTimer);
     this.sessions.delete(sessionId);
+  }
+
+  /** Best-effort journal write; never blocks or throws into the spawn path. */
+  private journal(session: ProcessSession, input: StartCommandInput, pid: number | undefined): void {
+    if (!this.journalDir || !pid || pid <= 1) return;
+    session.journalPid = pid;
+    void import("./process-journal.js").then(({ recordProcessJournal }) =>
+      recordProcessJournal(this.journalDir!, {
+        pid,
+        pgid: process.platform === "win32" ? undefined : pid,
+        workspaceId: input.workspaceId,
+        workspaceRoot: input.workspaceRoot ?? input.cwd,
+        commandPreview: input.command.slice(0, 120),
+        startedAt: new Date().toISOString(),
+      }).catch(() => undefined),
+    ).catch(() => undefined);
+  }
+
+  private unjournal(session: ProcessSession | undefined): void {
+    if (!session || !this.journalDir || !session.journalPid) return;
+    const pid = session.journalPid;
+    session.journalPid = undefined;
+    void import("./process-journal.js").then(({ removeProcessJournal }) =>
+      removeProcessJournal(this.journalDir!, pid).catch(() => undefined),
+    ).catch(() => undefined);
   }
 }

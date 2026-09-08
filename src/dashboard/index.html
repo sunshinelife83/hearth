@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth Dashboard</title>
+<link rel="stylesheet" href="/dashboard/styles.css">
+</head>
+<body>
+<header>
+  <h1>Hearth</h1>
+  <nav id="tabs" hidden>
+    <button data-tab="overview" class="active">Overview</button>
+    <button data-tab="connect">Connect</button>
+    <button data-tab="workspaces">Workspaces</button>
+    <button data-tab="agents">Agents</button>
+    <button data-tab="tasks">Tasks</button>
+    <button data-tab="logs">Logs</button>
+    <button data-tab="config">Config</button>
+    <button data-tab="setup">Setup</button>
+  </nav>
+  <button id="logout" hidden>Log out</button>
+</header>
+<main>
+  <section id="login">
+    <h2>Sign in</h2>
+    <p>Enter the Owner password printed by <code>hearth init</code>.</p>
+    <form id="login-form">
+      <input id="owner-token" type="password" autocomplete="current-password" placeholder="Owner password" required>
+      <button type="submit">Sign in</button>
+    </form>
+    <p id="login-error" class="error" hidden></p>
+  </section>
+  <section id="overview" class="tab" hidden></section>
+  <section id="connect" class="tab" hidden></section>
+  <section id="workspaces" class="tab" hidden></section>
+  <section id="agents" class="tab" hidden></section>
+  <section id="tasks" class="tab" hidden></section>
+  <section id="logs" class="tab" hidden></section>
+  <section id="config" class="tab" hidden></section>
+  <section id="setup" class="tab" hidden></section>
+</main>
+<script src="/dashboard/app.js"></script>
+</body>
+</html>

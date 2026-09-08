@@ -60,8 +60,8 @@ function formHtml(params: {
   fields: Record<string, string | undefined>;
   csrfToken?: string;
 }): string {
-  const scopeText = params.scopes.length > 0 ? params.scopes.join(" ") : "devspace";
-  const resourceText = params.resource?.href ?? "DevSpace MCP endpoint";
+  const scopeText = params.scopes.length > 0 ? params.scopes.join(" ") : "hearth";
+  const resourceText = params.resource?.href ?? "Hearth MCP endpoint";
   const error = params.error
     ? `<p class="error">${htmlEscape(params.error)}</p>`
     : "";
@@ -75,7 +75,7 @@ function formHtml(params: {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Connect DevSpace</title>
+    <title>Connect Hearth</title>
     <style>
       body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
       main { max-width: 440px; margin: 12vh auto; padding: 32px; background: #111827; border: 1px solid #334155; border-radius: 18px; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
@@ -93,7 +93,7 @@ function formHtml(params: {
   </head>
   <body>
     <main>
-      <h1>Connect DevSpace</h1>
+      <h1>Connect Hearth</h1>
       <p class="warning">Only approve this if you are intentionally connecting your own ChatGPT or MCP client to this local machine.</p>
       ${error}
       <dl>
@@ -105,7 +105,7 @@ function formHtml(params: {
 ${hiddenFields}
         <label for="owner_token">Owner password</label>
         <input id="owner_token" name="owner_token" type="password" autocomplete="current-password" autofocus required />
-        <button type="submit">Authorize DevSpace</button>
+        <button type="submit">Authorize Hearth</button>
       </form>
     </main>
   </body>
@@ -138,9 +138,9 @@ function consentCsrfToken(
     resource?: string;
   },
 ): string {
-  const key = createHash("sha256").update(`devspace-consent:${config.ownerToken}`).digest();
+  const key = createHash("sha256").update(`hearth-consent:${config.ownerToken}`).digest();
   const canonical = JSON.stringify([
-    "devspace-consent-v1",
+    "hearth-consent-v1",
     fields.client_id ?? "",
     fields.redirect_uri ?? "",
     fields.code_challenge ?? "",
@@ -350,7 +350,7 @@ export class SingleUserOAuthProvider implements OAuthServerProvider {
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     const record = this.oauthStore.getAccessToken(hashToken(token));
     if (!record || record.expiresAt < Math.floor(Date.now() / 1000)) {
-      // Local device tokens (created via `devspace token create`) carry the
+      // Local device tokens (created via `hearth token create`) carry the
       // same authority; they bind to this server's protected resource.
       const device = this.deviceTokens.verify(token);
       if (device) {

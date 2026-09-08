@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { loadConfig } from "./config.js";
 import { buildLocalMcpServer } from "./stdio-server.js";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 
 describe("stdio MCP surface", () => {
   let root = "";
@@ -15,14 +15,14 @@ describe("stdio MCP surface", () => {
   let closeServer: () => Promise<void>;
 
   before(async () => {
-    root = await mkdtemp(join(tmpdir(), "devspace-stdio-test-"));
+    root = await mkdtemp(join(tmpdir(), "hearth-stdio-test-"));
     const configDir = join(root, "config");
     const workspaceRoot = join(root, "project");
     const stateDir = join(root, "state");
     await mkdir(workspaceRoot, { recursive: true });
     await writeFile(join(workspaceRoot, "hello.txt"), "hello from stdio\n");
-    const env = writeTestDevspaceConfig(configDir, {
-      server: { host: "127.0.0.1", port: 7676, publicBaseUrl: null },
+    const env = writeTestHearthConfig(configDir, {
+      server: { host: "127.0.0.1", port: 7176, publicBaseUrl: null },
       workspaces: { allowedRoots: [workspaceRoot] },
       storage: { stateDir },
       tools: { mode: "claude" },

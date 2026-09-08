@@ -2,20 +2,20 @@
 
 This page collects the setup issues users are most likely to hit.
 
-## `devspace` Command Not Found
+## `hearth` Command Not Found
 
 Use `npx`:
 
 ```bash
-npx @waishnav/devspace init
-npx @waishnav/devspace serve
+npx @waishnav/hearth init
+npx @waishnav/hearth serve
 ```
 
 If you installed globally, confirm npm's global bin directory is on `PATH`.
 
 ## Unsupported Node Version
 
-DevSpace requires Node `>=22.19 <27`.
+Hearth requires Node `>=22.19 <27`.
 
 Check:
 
@@ -40,7 +40,7 @@ npm rebuild better-sqlite3
 Then run:
 
 ```bash
-npx @waishnav/devspace doctor
+npx @waishnav/hearth doctor
 ```
 
 Release starts run a native dependency check before launching.
@@ -62,20 +62,15 @@ https://your-tunnel-host.example.com/mcp
 If you saved the wrong value:
 
 ```bash
-npx @waishnav/devspace config set publicBaseUrl https://your-tunnel-host.example.com
+npx @waishnav/hearth config set publicBaseUrl https://your-tunnel-host.example.com
 ```
 
-## Tailscale Funnel `/mcp` Returns 404
+## Reverse Proxy `/mcp` Returns 404
+Proxy the whole Hearth server from the root of your tunnel or reverse proxy.
 
-Proxy the whole DevSpace server from the Funnel root:
-
-```bash
-tailscale funnel --bg 7676
-```
-
-Do not use `--set-path=/mcp`. Tailscale removes a configured mount path before
+Do not mount only `/mcp`: some proxies strip a configured mount path before
 proxying to the local service, so a public `/mcp` request can otherwise arrive
-at DevSpace as `/`. DevSpace also needs OAuth routes outside `/mcp`, so serving
+at Hearth as `/`. Hearth also needs OAuth routes outside `/mcp`, so serving
 the whole local origin is the correct setup.
 
 ## Tunnel URL Changed
@@ -85,56 +80,59 @@ Temporary tunnels often change URLs between runs.
 Update the configured URL:
 
 ```bash
-npx @waishnav/devspace config set publicBaseUrl https://new-tunnel.example.com
+npx @waishnav/hearth config set publicBaseUrl https://new-tunnel.example.com
 ```
 
 For a stable URL:
 
 ```bash
-npx @waishnav/devspace config set publicBaseUrl https://devspace.example.com
+npx @waishnav/hearth config set publicBaseUrl https://hearth.example.com
 ```
 
 ## Host Header Or 403 Problems
 
-DevSpace derives allowed hosts from the configured public URL.
+Hearth derives allowed hosts from the configured public URL.
 
 Run:
 
 ```bash
-npx @waishnav/devspace doctor
+npx @waishnav/hearth doctor
 ```
 
 Confirm the public URL hostname appears in allowed hosts. If you changed tunnel
 URLs, update `publicBaseUrl`.
 
 For intentional local debugging only, set `server.allowedHosts` to `["*"]` in
-`~/.devspace/config.jsonc`.
+`~/.hearth/config.jsonc`.
 
 ## OAuth Redirect Host Rejected
 
-By default, DevSpace allows redirects for:
+By default, Hearth allows redirects for:
 
 ```text
-chatgpt.com
+chatgpt.com (and subdomains)
+claude.ai (and subdomains)
+anthropic.com (and subdomains)
 localhost
 127.0.0.1
 ```
 
 If another MCP client uses a different redirect host, add it to
-`oauth.allowedRedirectHosts` in `~/.devspace/config.jsonc`.
+`oauth.allowedRedirectHosts` in `~/.hearth/config.jsonc`. Subdomains of a
+listed host are accepted automatically.
 
 ## Owner Password Not Accepted
 
 Make sure you are entering the Owner password from:
 
 ```text
-~/.devspace/auth.json
+~/.hearth/auth.json
 ```
 
 To regenerate setup:
 
 ```bash
-npx @waishnav/devspace init --force
+npx @waishnav/hearth init --force
   (`--force` now rotates the Owner password and prints the new value in ChatGPT setups; existing access tokens stay valid until they expire — revoke them via the OAuth revocation endpoint if needed)
 ```
 
@@ -145,7 +143,7 @@ client receives an unknown workspace error, call `open_workspace` again for that
 project.
 
 Workspace session metadata is persisted. ChatGPT may provide optional
-conversation metadata that lets DevSpace resume the same checkout workspace for
+conversation metadata that lets Hearth resume the same checkout workspace for
 the same project in that conversation; repeated opens reuse the `workspaceId`
 and do not repeat context already provided for that reused checkout. Worktree
 mode always creates a new isolated workspace with its own complete context.
@@ -158,26 +156,26 @@ shows the combined changes and advances the review point automatically.
 
 ## Data Retention
 
-DevSpace does not currently prune workspace sessions, conversation bindings,
+Hearth does not currently prune workspace sessions, conversation bindings,
 or review refs. A future product retention policy will define safe cleanup for
 these records; no automatic deletion is performed today.
 
 ## MCP Workspace Path Rejected
 
 The path passed to `open_workspace` must be inside one of the allowed roots
-configured during ChatGPT setup. Direct `devspace agents` commands instead use
+configured during ChatGPT setup. Direct `hearth agents` commands instead use
 the current local project and are not gated by MCP allowed roots.
 
 Run:
 
 ```bash
-npx @waishnav/devspace config get
+npx @waishnav/hearth config get
 ```
 
 Then either open a project under an allowed root or rerun setup:
 
 ```bash
-npx @waishnav/devspace init --force
+npx @waishnav/hearth init --force
 ```
 
 ## Worktree Mode Fails
@@ -197,7 +195,7 @@ needed.
 
 ## Windows Shell Commands Fail
 
-DevSpace shell execution requires Bash. Native PowerShell and `cmd.exe` command
+Hearth shell execution requires Bash. Native PowerShell and `cmd.exe` command
 execution are not supported yet.
 
 Install Git for Windows and use Git Bash, or use WSL, MSYS2, or Cygwin Bash.
@@ -205,7 +203,7 @@ Install Git for Windows and use Git Bash, or use WSL, MSYS2, or Cygwin Bash.
 Run:
 
 ```bash
-npx @waishnav/devspace doctor
+npx @waishnav/hearth doctor
 ```
 
 Confirm Bash is detected.
@@ -213,39 +211,39 @@ Confirm Bash is detected.
 ## Skills Do Not Appear
 
 Skills are enabled by default. Confirm `skills.enabled` is `true` in
-`~/.devspace/config.jsonc`.
+`~/.hearth/config.jsonc`.
 
-DevSpace looks in standard Agent Skills locations:
+Hearth looks in standard Agent Skills locations:
 
 - `~/.agents/skills`
 - project `.agents/skills`
-- `~/.devspace/skills`
+- `~/.hearth/skills`
 
 It also checks compatibility and custom paths:
 
-- the bundled `subagents` skill when Subagents are enabled, unless `~/.devspace/skills/subagents/SKILL.md` exists
+- the bundled `subagents` skill when Subagents are enabled, unless `~/.hearth/skills/subagents/SKILL.md` exists
 - `skills.agentDir/skills`, defaulting to `~/.codex/skills`
 - additional paths from `skills.paths`
 
-When Subagents are enabled, DevSpace loads agent profiles from
-`~/.devspace/agents/*.md` and project `.devspace/agents/*.md`, then exposes a
+When Subagents are enabled, Hearth loads agent profiles from
+`~/.hearth/agents/*.md` and project `.hearth/agents/*.md`, then exposes a
 compact profile catalog through `open_workspace`. The bundled
 `subagents` skill keeps the model-facing workflow to
-`devspace agents targets`, `devspace agents ls`, `devspace agents run`,
-`devspace agents continue`, and `devspace agents show`.
-Those commands automatically manage the internal local agent daemon; `devspace
+`hearth agents targets`, `hearth agents ls`, `hearth agents run`,
+`hearth agents continue`, and `hearth agents show`.
+Those commands automatically manage the internal local agent daemon; `hearth
 serve` is not a prerequisite.
-`devspace agents ls` lists existing subagent sessions, not profile
+`hearth agents ls` lists existing subagent sessions, not profile
 definitions.
 
 For a Coding Agent, run the installation command printed by
-`devspace init`:
+`hearth init`:
 
 ```bash
-npx skills add Waishnav/devspace --skill subagents --global
+npx skills add Waishnav/hearth --skill subagents --global
 ```
 
-The Skills CLI handles agent discovery and installation. DevSpace setup does
+The Skills CLI handles agent discovery and installation. Hearth setup does
 not copy files into agent skill directories.
 
 Packaged agent profile examples under `examples/agents/` are starter templates.
@@ -254,20 +252,43 @@ Copy or adapt them into one of the active profile directories before use.
 Legacy project paths such as `.pi/skills` can be added to `skills.paths` when needed.
 
 If a skill appears in `open_workspace`, the model should read that skill's
-`SKILL.md` before following it. DevSpace permits reads within advertised skill
+`SKILL.md` before following it. Hearth permits reads within advertised skill
 directories without tracking whether `SKILL.md` was read first.
 
 ## Review Card Does Not Appear
 
-DevSpace attaches widget UI only to `open_workspace` and `show_changes`.
+Hearth attaches widget UI only to `open_workspace` and `show_changes`.
 Ordinary reads, edits, and commands intentionally render as normal tool results
 to avoid one iframe per call. Plain MCP clients may ignore ChatGPT Apps widget
 metadata and only show text results; `show_changes` remains available there.
 
 If both cards are missing in ChatGPT, confirm that `ui.enabled` is not `false`
-in `~/.devspace/config.jsonc` and reconnect the MCP server.
+in `~/.hearth/config.jsonc` and reconnect the MCP server.
 
 Historical `show_changes` cards use the `reviewRef` in their structured result
 to recover the exact Git-backed review when a host reloads the app without its
 original result metadata. `open_workspace` can rebuild its card directly from
 its structured result.
+
+## OpenCode Backend Fails With "Unexpected Server Error"
+
+If every opencode turn fails with `PROVIDER_EXECUTION_ERROR: ... Unexpected
+server error` while `opencode run` in a terminal works, the opencode server's
+local database (`~/.local/share/opencode/opencode.db`) is in a broken state:
+sessions created through the API land outside the table that message inserts
+reference, so every prompt and agent-switch is rejected. Hearth cannot repair
+another program's database.
+
+Confirm it without touching your data:
+
+```bash
+mkdir -p /tmp/oc-fresh-data && XDG_DATA_HOME=/tmp/oc-fresh-data opencode serve --hostname=127.0.0.1 --port=18927 &
+# dispatch one opencode turn through Hearth with XDG_DATA_HOME set for the daemon,
+# or simply: if a fresh data dir works, the old database is the cause.
+```
+
+Remedies: back up then reset the opencode database (you lose TUI session
+history), or use the `codex` backend, which is unaffected. Hearth-side, every
+opencode runtime now gets its own server port (no shared-4096 collisions),
+redundant agent switches are skipped, and provider failures carry the
+underlying cause text instead of a bare "execution failed".

@@ -1,0 +1,103 @@
+#!/bin/sh
+# Hearth installer. Works today from a source checkout; registry install
+# activates once @waishnav/hearth is published.
+#
+# From a checkout (this directory):
+#   ./install.sh
+#
+# From a packed tarball:
+#   HEARTH_PKG=/path/to/waishnav-hearth-1.0.8.tgz ./install.sh
+#
+# From the registry (after first publish):
+#   HEARTH_PKG=@waishnav/hearth ./install.sh
+set -eu
+
+PKG="${HEARTH_PKG:-}"
+
+need_node() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "error: node is required (22.19+). Install it from https://nodejs.org, then rerun." >&2
+    exit 1
+  fi
+  major="$(node -p 'process.versions.node.split(".")[0]')"
+  if [ "$major" -lt 22 ]; then
+    echo "error: node 22.19+ is required (found $(node -v))." >&2
+    exit 1
+  fi
+}
+
+is_checkout() {
+  [ -f ./package.json ] && [ -f ./src/cli.ts ] && [ -d ./src/dashboard ] \
+    && grep -q '"@waishnav/hearth"' ./package.json 2>/dev/null
+}
+
+install_from_checkout() {
+  echo "Source checkout detected. Packing (this runs the build) ..."
+  rm -f ./waishnav-hearth-*.tgz
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm install --frozen-lockfile >/dev/null 2>&1 || pnpm install
+    pnpm pack >/dev/null 2>&1 || pnpm pack
+  else
+    npm install --no-audit --no-fund >/dev/null 2>&1 || npm install --no-audit --no-fund
+    npm pack >/dev/null 2>&1 || npm pack
+  fi
+  TARBALL="$(ls -t ./waishnav-hearth-*.tgz 2>/dev/null | head -n 1)"
+  if [ -z "$TARBALL" ]; then
+    echo "error: packing produced no tarball." >&2
+    exit 1
+  fi
+  echo "Installing $TARBALL globally ..."
+  PKG="$TARBALL"
+  install_pkg
+}
+
+pnpm_global_usable() {
+  command -v pnpm >/dev/null 2>&1 || return 1
+  bindir="$(pnpm bin -g 2>/dev/null)" || return 1
+  case ":$PATH:" in *":$bindir:"*) return 0 ;; *) return 1 ;; esac
+}
+
+install_pkg() {
+  # Prefer pnpm only when its global bins are actually reachable; otherwise
+  # npm (whose global bin is usually on PATH via nvm).
+  if pnpm_global_usable; then
+    pnpm add -g "$PKG"
+  elif command -v npm >/dev/null 2>&1; then
+    npm install -g "$PKG"
+  else
+    echo "error: need pnpm or npm on PATH." >&2
+    exit 1
+  fi
+}
+
+need_node
+
+if [ -z "$PKG" ]; then
+  if is_checkout; then
+    install_from_checkout
+  else
+    echo "error: @waishnav/hearth is not published yet." >&2
+    echo "Install from a source checkout instead:" >&2
+    echo "  git clone <your-hearth-repo-url> && cd hearth && ./install.sh" >&2
+    echo "or point HEARTH_PKG at a tarball: HEARTH_PKG=./waishnav-hearth-*.tgz ./install.sh" >&2
+    exit 1
+  fi
+else
+  echo "Installing $PKG ..."
+  install_pkg
+fi
+
+if command -v hearth >/dev/null 2>&1; then
+  echo "Installed: $(hearth version)"
+else
+  echo "Installed, but 'hearth' is not on PATH in this shell."
+  echo "Add your global bin dir to PATH, e.g.:"
+  echo "  export PATH=\"\$(npm prefix -g)/bin:\$PATH\""
+fi
+
+if [ -t 0 ]; then
+  echo "Running first-time setup ..."
+  hearth init
+else
+  echo "Next: run 'hearth init', then 'hearth serve'. Dashboard: http://127.0.0.1:7176/dashboard"
+fi

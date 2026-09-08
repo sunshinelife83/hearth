@@ -50,7 +50,7 @@ import type {
   StartLocalAgentInput,
 } from "./local-agent-manager.js";
 import type { LocalAgentRecord, LocalAgentWorkspaceScope } from "./local-agent-store.js";
-import { devspaceConfigDir } from "./user-config.js";
+import { hearthConfigDir } from "./user-config.js";
 
 const DEFAULT_STARTUP_TIMEOUT_MS = 8_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
@@ -88,7 +88,7 @@ export class LocalAgentClient {
     this.startupTimeoutMs = options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.spawnDaemon = options.spawnDaemon ?? (() => spawnLocalAgentDaemon(
-      options.configDir ?? devspaceConfigDir(),
+      options.configDir ?? hearthConfigDir(),
     ));
   }
 
@@ -110,12 +110,14 @@ export class LocalAgentClient {
     prompt: string,
     overrides: RunOverrides = {},
     scope: LocalAgentWorkspaceScope,
+    timeoutMs?: number,
   ): Promise<BetterResult<LocalAgentRecord, AgentContinueError | AgentDaemonError>> {
     const result = await this.request("agent.continue", {
       id: agentId,
       prompt,
       scope,
       ...(Object.keys(overrides).length > 0 ? { overrides } : {}),
+      ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     });
     return decodeRequestResult(result, "agent.continue", decodeAgentRecord);
   }
@@ -151,13 +153,14 @@ export class LocalAgentClient {
   async resume(
     agentId: string,
     scope: LocalAgentWorkspaceScope,
-    options: { prompt?: string; overrides?: RunOverrides } = {},
+    options: { prompt?: string; overrides?: RunOverrides; timeoutMs?: number } = {},
   ): Promise<BetterResult<LocalAgentRecord, AgentLifecycleError | AgentDaemonError>> {
     const result = await this.request("agent.resume", {
       id: agentId,
       scope,
       ...(options.prompt ? { prompt: options.prompt } : {}),
       ...(options.overrides && Object.keys(options.overrides).length > 0 ? { overrides: options.overrides } : {}),
+      ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
     });
     return decodeRequestResult(result, "agent.resume", decodeAgentRecord);
   }
@@ -477,7 +480,7 @@ export function localAgentDaemonEnvironment(
   configDir: string,
   env: NodeJS.ProcessEnv,
 ): NodeJS.ProcessEnv {
-  return { ...env, DEVSPACE_CONFIG_DIR: configDir };
+  return { ...env, HEARTH_CONFIG_DIR: configDir };
 }
 
 export function daemonExecArgv(execArgv: readonly string[]): string[] {

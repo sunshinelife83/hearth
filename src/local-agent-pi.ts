@@ -204,7 +204,7 @@ async function defaultPiSessionFactory(
     createAgentSession,
     getAgentDir,
   } = await import("@earendil-works/pi-coding-agent");
-  // DevSpace's agentDir is the compatibility directory used for instructions;
+  // Hearth's agentDir is the compatibility directory used for instructions;
   // Pi keeps its own native auth, model, and session state under getAgentDir().
   const agentDir = getAgentDir();
   const authStorage = AuthStorage.create(join(agentDir, "auth.json"));

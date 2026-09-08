@@ -21,7 +21,7 @@ describe("sandbox adapters", () => {
     assert.ok(wrapped.args.includes("/home/user/project"));
     assert.ok(wrapped.args.includes("--tmpfs"));
     assert.ok(wrapped.args.includes("--unshare-net"), "network denied adds --unshare-net");
-    assert.deepEqual(wrapped.args.slice(-3), ["/bin/zsh", "-lc", "npm test"], "original shell runs verbatim");
+    assert.deepEqual(wrapped.args.slice(-4), ["--", "/bin/zsh", "-lc", "npm test"], "original shell runs verbatim after --");
   });
 
   it("keeps the network when allowed under bwrap", () => {

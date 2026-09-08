@@ -44,6 +44,8 @@ export interface StartLocalAgentInput {
   model?: string;
   effort?: string;
   writeMode?: LocalAgentWriteMode;
+  /** Watchdog budget for the first turn; defaults to 30 minutes. */
+  timeoutMs?: number;
 }
 
 export interface RunOverrides {
@@ -73,13 +75,24 @@ export type AgentLookupError = AgentTargetError | AgentScopeError | AgentStoreEr
 export type AgentListError = AgentScopeError | AgentStoreError;
 export type AgentLifecycleError = AgentLookupError | AgentConflictError;
 
+/** Default watchdog budget per agent turn (30 minutes). */
+export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 30 * 60 * 1000;
+/** Watchdog ceiling (7 days); larger values are clamped, not rejected. */
+export const MAX_AGENT_TURN_TIMEOUT_MS = 7 * 24 * 3600 * 1000;
+
+/** Defensive clamp: non-finite/non-positive fall back to the default. */
+export function normalizeTimeoutMs(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) return DEFAULT_AGENT_TURN_TIMEOUT_MS;
+  return Math.min(Math.floor(value), MAX_AGENT_TURN_TIMEOUT_MS);
+}
+
 /**
  * Bound for the persisted in-flight output tail (characters).
  */
 const MAX_OUTPUT_CHARS = 64_000;
 
 /**
- * Owns one durable DevSpace agent's turn lifecycle. Provider runtimes remain
+ * Owns one durable Hearth agent's turn lifecycle. Provider runtimes remain
  * below this seam; this class only translates records into provider inputs and
  * persists the result.
  */
@@ -101,6 +114,14 @@ export class LocalAgentManager {
    * taken from here instead of persisting a provider error.
    */
   private readonly interruptedAgents = new Map<string, "stopped" | "paused">();
+  /**
+   * Agents whose watchdog budget expired. Checked before interruptedAgents:
+   * a turn that outlived its budget is a timeout error even if a stop/pause
+   * landed in the same window.
+   */
+  private readonly timedOutAgents = new Set<string>();
+  /** Budget recorded per tracked turn so timeout errors report the real value. */
+  private readonly turnTimeoutMs = new Map<string, number>();
   private accepting = true;
   private closePromise?: Promise<void>;
 
@@ -167,7 +188,7 @@ export class LocalAgentManager {
         model: target.model,
         effort: target.effort,
         writeMode: input.writeMode,
-      }, input.workspaceId);
+      }, input.workspaceId, input.timeoutMs);
     });
   }
 
@@ -176,6 +197,7 @@ export class LocalAgentManager {
     prompt: string,
     overrides: RunOverrides = {},
     scope: LocalAgentWorkspaceScope,
+    timeoutMs?: number,
   ): Promise<BetterResult<LocalAgentRecord, AgentContinueError>> {
     const manager = this;
     return Result.gen(async function* () {
@@ -187,7 +209,7 @@ export class LocalAgentManager {
       yield* manager.profileForRecordResult(record, profiles);
       yield* manager.providerEnabledResult(record.provider, record.profileName, "continue");
       yield* manager.driverResult(record.provider, "continue", agentId);
-      return manager.begin(record, prompt, overrides, scope.workspaceId);
+      return manager.begin(record, prompt, overrides, scope.workspaceId, timeoutMs);
     });
   }
 
@@ -259,6 +281,7 @@ export class LocalAgentManager {
     prompt: string | undefined,
     overrides: RunOverrides = {},
     scope: LocalAgentWorkspaceScope,
+    timeoutMs?: number,
   ): Promise<BetterResult<LocalAgentRecord, AgentLifecycleError>> {
     const manager = this;
     return Result.gen(async function* () {
@@ -288,7 +311,7 @@ export class LocalAgentManager {
       yield* manager.profileForRecordResult(record, profiles);
       yield* manager.providerEnabledResult(record.provider, record.profileName, "resume");
       yield* manager.driverResult(record.provider, "resume", agentId);
-      return manager.begin(record, prompt ?? "Resume the task.", overrides, scope.workspaceId);
+      return manager.begin(record, prompt ?? "Resume the task.", overrides, scope.workspaceId, timeoutMs);
     });
   }
 
@@ -385,6 +408,7 @@ export class LocalAgentManager {
     prompt: string,
     overrides: RunOverrides,
     workspaceId?: string,
+    timeoutMs?: number,
   ): BetterResult<LocalAgentRecord, AgentConflictError | AgentStoreError> {
     if (this.activeTurns.has(record.id)) {
       return Result.err(new AgentConflictError({
@@ -411,8 +435,9 @@ export class LocalAgentManager {
     // Defer invocation until after the tracking entry is visible. This keeps
     // cleanup correct even if runTurn later gains a synchronous completion path.
     const turn = Promise.resolve().then(() => (
-      this.runTurn(updated.value, prompt, overrides, workspaceId)
+      this.runTurn(updated.value, prompt, overrides, workspaceId, normalizeTimeoutMs(timeoutMs))
     ));
+    this.turnTimeoutMs.set(record.id, normalizeTimeoutMs(timeoutMs));
     this.activeTurns.set(record.id, turn);
     void turn.catch(() => undefined);
     return updated;
@@ -423,8 +448,10 @@ export class LocalAgentManager {
     prompt: string,
     overrides: RunOverrides,
     workspaceId?: string,
+    timeoutMs: number = DEFAULT_AGENT_TURN_TIMEOUT_MS,
   ): Promise<void> {
     const startedAt = Date.now();
+    const watchdog = this.armWatchdog(record.id, timeoutMs);
     this.log("info", "agent_run_started", {
       provider: record.provider,
       agentId: record.id,
@@ -499,6 +526,10 @@ export class LocalAgentManager {
       if (current.isErr()) throw current.error;
       if (!current.value) return;
       const interrupted = this.interruptedAgents.get(record.id);
+      if (this.timedOutAgents.has(record.id)) {
+        this.persistTimeoutError(record, startedAt, timeoutMs);
+        return;
+      }
       if (interrupted) {
         this.store.updateResult(record.id, {
           providerSessionId: runResult.providerSessionId ?? current.value.providerSessionId,
@@ -546,6 +577,9 @@ export class LocalAgentManager {
       });
       throw error;
     } finally {
+      clearTimeout(watchdog);
+      this.timedOutAgents.delete(record.id);
+      this.turnTimeoutMs.delete(record.id);
       this.activeTurns.delete(record.id);
       this.activeRuntimeKeys.delete(record.id);
       this.outputBuffers.delete(record.id);
@@ -553,11 +587,47 @@ export class LocalAgentManager {
     }
   }
 
+  /**
+   * Watchdog: when the budget expires while the turn is still tracked,
+   * interrupt the runtime; completion paths then persist a timeout error.
+   * The timer is unref'd so an idle manager never holds the process open.
+   */
+  private armWatchdog(agentId: string, timeoutMs: number): NodeJS.Timeout {
+    const timer = setTimeout(() => {
+      if (!this.activeTurns.has(agentId)) return;
+      this.timedOutAgents.add(agentId);
+      void this.interruptTurn(agentId, "stopped").catch(() => undefined);
+    }, timeoutMs);
+    timer.unref?.();
+    return timer;
+  }
+
+  private persistTimeoutError(record: LocalAgentRecord, startedAt: number, timeoutMs: number): void {
+    const minutes = Math.round(timeoutMs / 60000);
+    const persisted = this.store.updateResult(record.id, {
+      status: "error",
+      error: `Agent turn exceeded its timeout budget of ${minutes} minute(s). Resume with a smaller task or a larger timeout.`,
+      errorCode: "AGENT_TIMEOUT",
+      errorRetryable: true,
+    });
+    this.log("warn", "agent_turn_timeout", {
+      provider: record.provider,
+      agentId: record.id,
+      timeoutMs,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      persistenceFailed: persisted.isErr(),
+    });
+  }
+
   private persistRunError(
     record: LocalAgentRecord,
     error: LocalAgentError,
     startedAt: number,
   ): void {
+    if (this.timedOutAgents.has(record.id)) {
+      this.persistTimeoutError(record, startedAt, this.turnTimeoutMs.get(record.id) ?? DEFAULT_AGENT_TURN_TIMEOUT_MS);
+      return;
+    }
     const interrupted = this.interruptedAgents.get(record.id);
     if (interrupted) {
       const persisted = this.store.updateResult(record.id, {
@@ -717,7 +787,7 @@ export class LocalAgentManager {
     const normalized = resolve(workspaceRoot);
     // Security: allowed roots apply to every caller. The previous behavior
     // skipped the check when workspaceId was absent, which let MCP-shell
-    // invocations (`devspace agents run` via a shell tool) run agents
+    // invocations (`hearth agents run` via a shell tool) run agents
     // anywhere on disk (audit finding SEC-04).
     void workspaceId;
     if (!this.allowedRoots) return Result.ok(normalized);

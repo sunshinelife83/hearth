@@ -1,29 +1,32 @@
 import {
-  defaultDevspaceConfig,
-  type DevspaceConfig,
+  defaultHearthConfig,
+  type HearthConfig,
 } from "../config-schema.js";
-import { writeDevspaceConfig } from "../user-config.js";
+import type { FleetConfig } from "../orchestration/lanes.js";
+import { writeHearthConfig } from "../user-config.js";
 
 type SectionOverrides = {
-  server?: Partial<DevspaceConfig["server"]>;
-  workspaces?: Partial<DevspaceConfig["workspaces"]>;
-  storage?: Partial<DevspaceConfig["storage"]>;
-  tools?: Partial<DevspaceConfig["tools"]>;
-  ui?: Partial<DevspaceConfig["ui"]>;
-  artifacts?: Partial<DevspaceConfig["artifacts"]>;
-  skills?: Partial<DevspaceConfig["skills"]>;
-  subagents?: DevspaceConfig["subagents"];
-  logging?: Partial<DevspaceConfig["logging"]>;
-  oauth?: Partial<DevspaceConfig["oauth"]>;
+  server?: Partial<HearthConfig["server"]>;
+  workspaces?: Partial<HearthConfig["workspaces"]>;
+  storage?: Partial<HearthConfig["storage"]>;
+  tools?: Partial<HearthConfig["tools"]>;
+  ui?: Partial<HearthConfig["ui"]>;
+  artifacts?: Partial<HearthConfig["artifacts"]>;
+  skills?: Partial<HearthConfig["skills"]>;
+  subagents?: HearthConfig["subagents"];
+  fleet?: FleetConfig;
+  tls?: Partial<HearthConfig["tls"]>;
+  logging?: Partial<HearthConfig["logging"]>;
+  oauth?: Partial<HearthConfig["oauth"]>;
 };
 
-export function writeTestDevspaceConfig(
+export function writeTestHearthConfig(
   configDir: string,
   overrides: SectionOverrides = {},
 ): NodeJS.ProcessEnv {
-  const defaults = defaultDevspaceConfig();
-  const env = { DEVSPACE_CONFIG_DIR: configDir };
-  writeDevspaceConfig({
+  const defaults = defaultHearthConfig();
+  const env = { HEARTH_CONFIG_DIR: configDir };
+  writeHearthConfig({
     ...defaults,
     server: { ...defaults.server, ...overrides.server },
     workspaces: { ...defaults.workspaces, ...overrides.workspaces },
@@ -33,11 +36,13 @@ export function writeTestDevspaceConfig(
     artifacts: { ...defaults.artifacts, ...overrides.artifacts },
     skills: { ...defaults.skills, ...overrides.skills },
     subagents: overrides.subagents ?? defaults.subagents,
+    fleet: overrides.fleet ?? defaults.fleet,
+    tls: { ...defaults.tls, ...overrides.tls },
     logging: { ...defaults.logging, ...overrides.logging },
     oauth: { ...defaults.oauth, ...overrides.oauth },
   }, env);
   return {
     ...env,
-    DEVSPACE_OAUTH_OWNER_TOKEN: "test-owner-token-that-is-long-enough",
+    HEARTH_OAUTH_OWNER_TOKEN: "test-owner-token-that-is-long-enough",
   };
 }

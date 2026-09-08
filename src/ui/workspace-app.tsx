@@ -76,7 +76,7 @@ async function boot(): Promise<void> {
   render();
 
   app = new App(
-    { name: "devspace-tool-cards", version: "0.4.0" },
+    { name: "hearth-tool-cards", version: "0.4.0" },
     {},
   );
 
@@ -209,7 +209,7 @@ async function reopenReview(
   return app.callServerTool({
     name: "show_changes",
     arguments: { workspaceId },
-    _meta: { "devspace/reviewRef": reviewRef },
+    _meta: { "hearth/reviewRef": reviewRef },
   });
 }
 

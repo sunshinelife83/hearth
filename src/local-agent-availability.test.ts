@@ -3,10 +3,10 @@ import { getLocalAgentProviderAvailabilitySnapshot } from "./local-agent-availab
 
 const snapshot = getLocalAgentProviderAvailabilitySnapshot({
   ...process.env,
-  CODEX_COMMAND: "/definitely/missing/devspace-codex",
+  CODEX_COMMAND: "/definitely/missing/hearth-codex",
 });
 assert.deepEqual(snapshot.find((provider) => provider.name === "codex"), {
   name: "codex",
   available: false,
-  reason: "/definitely/missing/devspace-codex executable not found",
+  reason: "/definitely/missing/hearth-codex executable not found",
 });

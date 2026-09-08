@@ -9,9 +9,9 @@ import {
   loadWorkspaceSkills,
   resolveSkillReadPath,
 } from "./skills.js";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 
-const root = await mkdtemp(join(tmpdir(), "devspace-skills-test-"));
+const root = await mkdtemp(join(tmpdir(), "hearth-skills-test-"));
 const originalHome = process.env.HOME;
 const originalUserProfile = process.env.USERPROFILE;
 
@@ -21,7 +21,7 @@ try {
   const projectRoot = join(root, "project");
   const agentDir = join(root, "agent");
   const explicitSkills = join(root, "explicit-skills");
-  const devspaceSkills = join(root, ".devspace", "skills");
+  const hearthSkills = join(root, ".hearth", "skills");
   const globalAgentsSkills = join(root, ".agents", "skills");
   const projectAgentsSkills = join(projectRoot, ".agents", "skills");
   const globalClaudeSkills = join(root, ".claude", "skills");
@@ -36,7 +36,7 @@ try {
   await mkdir(join(explicitSkills, "duplicate"), { recursive: true });
   await mkdir(join(explicitSkills, "disabled"), { recursive: true });
   await mkdir(join(explicitSkills, "subagents"), { recursive: true });
-  await mkdir(join(devspaceSkills, "devspace-local-skill"), { recursive: true });
+  await mkdir(join(hearthSkills, "hearth-local-skill"), { recursive: true });
 
   await writeFile(
     join(globalAgentsSkills, "agent-global-skill", "SKILL.md"),
@@ -94,14 +94,14 @@ try {
     ].join("\n"),
   );
   await writeFile(
-    join(devspaceSkills, "devspace-local-skill", "SKILL.md"),
+    join(hearthSkills, "hearth-local-skill", "SKILL.md"),
     [
       "---",
-      "name: devspace-local-skill",
-      "description: DevSpace local skill description.",
+      "name: hearth-local-skill",
+      "description: Hearth local skill description.",
       "---",
       "",
-      "# DevSpace Local Skill",
+      "# Hearth Local Skill",
     ].join("\n"),
   );
   await writeFile(
@@ -161,15 +161,15 @@ try {
     ].join("\n"),
   );
 
-  const configDir = join(root, ".devspace");
-  const disabledConfig = loadConfig(writeTestDevspaceConfig(configDir, {
+  const configDir = join(root, ".hearth");
+  const disabledConfig = loadConfig(writeTestHearthConfig(configDir, {
     server: { port: 1 },
     workspaces: { allowedRoots: [projectRoot] },
     skills: { agentDir, paths: [explicitSkills], enabled: false },
   }));
   assert.deepEqual(loadWorkspaceSkills(disabledConfig, projectRoot).skills, []);
 
-  const config = loadConfig(writeTestDevspaceConfig(configDir, {
+  const config = loadConfig(writeTestHearthConfig(configDir, {
     server: { port: 1 },
     workspaces: { allowedRoots: [projectRoot] },
     skills: {
@@ -183,7 +183,7 @@ try {
   assert.equal(loaded.skills.some((skill) => skill.name === "claude-global-skill"), true);
   assert.equal(loaded.skills.some((skill) => skill.name === "claude-project-skill"), true);
   assert.equal(loaded.skills.some((skill) => skill.name === "project-skill"), false);
-  assert.equal(loaded.skills.some((skill) => skill.name === "devspace-local-skill"), true);
+  assert.equal(loaded.skills.some((skill) => skill.name === "hearth-local-skill"), true);
   assert.equal(loaded.skills.some((skill) => skill.name === "subagents"), false);
   assert.equal(loaded.skills.filter((skill) => skill.name === "duplicate-skill").length, 1);
   assert.equal(loaded.skills.some((skill) => skill.name === "hidden-skill"), true);
@@ -195,7 +195,7 @@ try {
     false,
   );
 
-  const experimentalConfig = loadConfig(writeTestDevspaceConfig(configDir, {
+  const experimentalConfig = loadConfig(writeTestHearthConfig(configDir, {
     server: { port: 1 },
     workspaces: { allowedRoots: [projectRoot] },
     skills: { agentDir },
@@ -208,7 +208,7 @@ try {
     true,
   );
 
-  const duplicateConfig = loadConfig(writeTestDevspaceConfig(configDir, {
+  const duplicateConfig = loadConfig(writeTestHearthConfig(configDir, {
     server: { port: 1 },
     workspaces: { allowedRoots: [projectRoot] },
     skills: { agentDir, paths: [explicitSkills, "./.agents/skills"] },
@@ -218,7 +218,7 @@ try {
     1,
   );
 
-  const legacyPiConfig = loadConfig(writeTestDevspaceConfig(configDir, {
+  const legacyPiConfig = loadConfig(writeTestHearthConfig(configDir, {
     server: { port: 1 },
     workspaces: { allowedRoots: [projectRoot] },
     skills: { agentDir, paths: [explicitSkills, join(projectRoot, ".pi", "skills")] },

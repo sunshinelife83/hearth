@@ -51,11 +51,11 @@ const DEFAULT_DAEMON_SHUTDOWN_TIMEOUT_MS = 10_000;
 
 export interface LocalAgentDaemonManager {
   start(input: StartLocalAgentInput): Promise<Result<LocalAgentRecord, AgentStartError>>;
-  continue(agentId: string, prompt: string, overrides: RunOverrides | undefined, scope: LocalAgentWorkspaceScope): Promise<Result<LocalAgentRecord, AgentContinueError>>;
+  continue(agentId: string, prompt: string, overrides: RunOverrides | undefined, scope: LocalAgentWorkspaceScope, timeoutMs?: number): Promise<Result<LocalAgentRecord, AgentContinueError>>;
   get(agentId: string, scope: LocalAgentWorkspaceScope): Result<LocalAgentRecord, AgentLookupError>;
   list(scope: LocalAgentWorkspaceScope): Result<LocalAgentRecord[], AgentListError>;
   pause(agentId: string, scope: LocalAgentWorkspaceScope, options?: { force?: boolean }): Promise<Result<LocalAgentRecord, AgentLifecycleError>>;
-  resume(agentId: string, prompt: string | undefined, overrides: RunOverrides | undefined, scope: LocalAgentWorkspaceScope): Promise<Result<LocalAgentRecord, AgentLifecycleError>>;
+  resume(agentId: string, prompt: string | undefined, overrides: RunOverrides | undefined, scope: LocalAgentWorkspaceScope, timeoutMs?: number): Promise<Result<LocalAgentRecord, AgentLifecycleError>>;
   stop(agentId: string, scope: LocalAgentWorkspaceScope, options?: { force?: boolean }): Promise<Result<LocalAgentRecord, AgentLifecycleError>>;
   evictIdle(now?: number): Promise<void>;
   close(): Promise<void>;
@@ -306,6 +306,7 @@ export class LocalAgentDaemon {
           request.params.prompt,
           request.params.overrides,
           request.params.scope,
+          request.params.timeoutMs,
         ));
       case "agent.get":
         return unwrapManagerResult(this.manager.get(request.params.id, request.params.scope));
@@ -323,6 +324,7 @@ export class LocalAgentDaemon {
           request.params.prompt,
           request.params.overrides,
           request.params.scope,
+          request.params.timeoutMs,
         ));
       case "agent.stop":
         return unwrapManagerResult(await this.manager.stop(

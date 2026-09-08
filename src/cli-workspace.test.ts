@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { resolveCliWorkspaceContext } from "./cli-workspace.js";
 
-const root = mkdtempSync(join(tmpdir(), "devspace-cli-workspace-test-"));
+const root = mkdtempSync(join(tmpdir(), "hearth-cli-workspace-test-"));
 try {
   const repository = join(root, "repository");
   const nested = join(repository, "packages", "app");
@@ -31,15 +31,15 @@ try {
   });
 
   assert.deepEqual(resolveCliWorkspaceContext([plainRoot], {
-    DEVSPACE_WORKSPACE_ROOT: plainRoot,
+    HEARTH_WORKSPACE_ROOT: plainRoot,
   }, nestedRoot), {
     workspaceId: undefined,
     workspaceRoot: resolve(repositoryRoot),
   });
 
   assert.deepEqual(resolveCliWorkspaceContext([allowedRoot], {
-    DEVSPACE_WORKSPACE_ID: "ws_injected",
-    DEVSPACE_WORKSPACE_ROOT: nestedRoot,
+    HEARTH_WORKSPACE_ID: "ws_injected",
+    HEARTH_WORKSPACE_ROOT: nestedRoot,
   }, plainRoot), {
     workspaceId: "ws_injected",
     workspaceRoot: resolve(nestedRoot),
@@ -49,8 +49,8 @@ try {
     const repositoryAlias = join(root, "repository-alias");
     symlinkSync(repositoryRoot, repositoryAlias, "dir");
     assert.deepEqual(resolveCliWorkspaceContext([repositoryAlias], {
-      DEVSPACE_WORKSPACE_ID: "ws_injected",
-      DEVSPACE_WORKSPACE_ROOT: repositoryRoot,
+      HEARTH_WORKSPACE_ID: "ws_injected",
+      HEARTH_WORKSPACE_ROOT: repositoryRoot,
     }, plainRoot), {
       workspaceId: "ws_injected",
       workspaceRoot: resolve(repositoryRoot),
@@ -59,8 +59,8 @@ try {
 
   assert.throws(
     () => resolveCliWorkspaceContext([repositoryRoot], {
-      DEVSPACE_WORKSPACE_ID: "ws_injected",
-      DEVSPACE_WORKSPACE_ROOT: plainRoot,
+      HEARTH_WORKSPACE_ID: "ws_injected",
+      HEARTH_WORKSPACE_ROOT: plainRoot,
     }, nestedRoot),
     /outside allowed roots/,
   );

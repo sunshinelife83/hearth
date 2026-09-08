@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { loadConfig } from "./config.js";
 import { buildLocalMcpServer } from "./stdio-server.js";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 import { TaskStore, TaskTransitionError } from "./task-store.js";
 import { detectVerificationGates } from "./verification.js";
 
@@ -18,7 +18,7 @@ describe("task runtime (state machine + verification gates)", () => {
   let workspaceRoot = "";
 
   before(async () => {
-    root = await mkdtemp(join(tmpdir(), "devspace-task-test-"));
+    root = await mkdtemp(join(tmpdir(), "hearth-task-test-"));
     workspaceRoot = join(root, "project");
     await mkdir(workspaceRoot, { recursive: true });
     await writeFile(join(workspaceRoot, "package.json"), JSON.stringify({
@@ -27,8 +27,8 @@ describe("task runtime (state machine + verification gates)", () => {
     }));
     await writeFile(join(workspaceRoot, "gate.js"), "process.exit(Number(process.env.GATE_FAIL ?? 0))");
 
-    const env = writeTestDevspaceConfig(join(root, "config"), {
-      server: { host: "127.0.0.1", port: 7676, publicBaseUrl: null },
+    const env = writeTestHearthConfig(join(root, "config"), {
+      server: { host: "127.0.0.1", port: 7176, publicBaseUrl: null },
       workspaces: { allowedRoots: [workspaceRoot, join(root, 'plain')] },
       storage: { stateDir: join(root, "state") },
       tools: { mode: "claude" },
@@ -174,5 +174,50 @@ describe("task runtime (state machine + verification gates)", () => {
     const task = store.create({ workspaceRoot: workspaceRoot, goal: "guard" });
     assert.throws(() => store.transition(task.id, "completed"), TaskTransitionError);
     store.close();
+  });
+
+  it("bounds repair loops: the 6th failed verification fails the task", async () => {
+    const workspaceId = await openWorkspace();
+    const created = asRecord((await call("task_create", {
+      workspaceId,
+      goal: "always failing",
+    })).structuredContent);
+    const taskId = created.taskId as string;
+    await call("task_plan", { taskId, steps: ["try"] });
+    for (let round = 1; round <= 6; round += 1) {
+      const result = asRecord((await call("task_verify", {
+        taskId,
+        gates: [{ name: "failing", command: "node -e 'process.exit(3)'" }],
+      })).structuredContent);
+      if (round <= 5) {
+        assert.equal(result.status, "repairing", `round ${round} repairs`);
+      } else {
+        assert.equal(result.status, "failed", "repair budget exhausted on round 6");
+        assert.match(String(result.result ?? ""), /Repair budget exhausted/);
+      }
+    }
+  });
+
+  it("resumes failed tasks to planning, and refuses to resume live ones", async () => {
+    const workspaceId = await openWorkspace();
+    const created = asRecord((await call("task_create", {
+      workspaceId,
+      goal: "resumable",
+    })).structuredContent);
+    const taskId = created.taskId as string;
+    // Live task: resume must be rejected.
+    const liveResume = await call("task_resume", { taskId });
+    assert.equal(liveResume.isError, true);
+    // Fail it via the cancel path is terminal; use a failed task instead.
+    const store = new TaskStore(join(root, "state"));
+    const doomed = store.create({ workspaceRoot, goal: "doomed" });
+    store.transition(doomed.id, "executing", { plan: ["x"] });
+    store.transition(doomed.id, "failed", { error: "boom" });
+    store.close();
+    const resumed = asRecord((await call("task_resume", {
+      taskId: doomed.id,
+      reason: "test resume",
+    })).structuredContent);
+    assert.equal(resumed.status, "planning");
   });
 });

@@ -36,9 +36,9 @@ export function effectiveSkillPaths(config: ServerConfig, cwd: string): string[]
   const defaultPathCandidates = [
     join(homedir(), ".agents", "skills"),
     resolve(cwd, ".agents", "skills"),
-    config.devspaceSkillsDir,
+    config.hearthSkillsDir,
     join(config.agentDir, "skills"),
-    config.subagents.enabled && !hasSubagentsSkill(config.devspaceSkillsDir)
+    config.subagents.enabled && !hasSubagentsSkill(config.hearthSkillsDir)
       ? bundledSkills
       : undefined,
   ];

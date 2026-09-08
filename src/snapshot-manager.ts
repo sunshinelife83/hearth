@@ -7,7 +7,7 @@ import { git, getGitEligibility, safeWorkspaceRefSegment } from "./git.js";
  * Workspace snapshots built on the git object model (same technique as the
  * review checkpoints): a temporary index captures the full worktree state
  * (tracked + untracked, not ignored) into a tree commit referenced under
- * refs/devspace/snapshots/<workspace>/<epochMs>. Rollback diffs the current
+ * refs/hearth/snapshots/<workspace>/<epochMs>. Rollback diffs the current
  * worktree tree against the snapshot tree and applies the reverse patch, so
  * the user's HEAD and branches are never touched.
  *
@@ -25,8 +25,8 @@ export interface SnapshotCreateResult extends SnapshotRecord {
   dirtyBaseline: boolean;
 }
 
-const SNAPSHOT_REF_PREFIX = "refs/devspace/snapshots";
-const SNAPSHOT_AUTHOR_ENV_BASE = "devspace-snapshot";
+const SNAPSHOT_REF_PREFIX = "refs/hearth/snapshots";
+const SNAPSHOT_AUTHOR_ENV_BASE = "hearth-snapshot";
 
 export class SnapshotError extends Error {}
 
@@ -42,7 +42,7 @@ export async function createSnapshot(input: {
   const gitRoot = eligibility.gitRoot;
 
   const head = await headCommit(gitRoot);
-  const tempDir = await mkdtemp(join(tmpdir(), "devspace-snapshot-index-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "hearth-snapshot-index-"));
   try {
     const env = snapshotEnv(join(tempDir, "index"));
     if (head) await git(gitRoot, ["read-tree", head], { env });
@@ -50,7 +50,7 @@ export async function createSnapshot(input: {
     const tree = (await git(gitRoot, ["write-tree"], { env })).stdout.trim();
     const parentArgs = head ? ["-p", head] : [];
     const commit = (
-      await git(gitRoot, ["commit-tree", tree, ...parentArgs, "-m", `DevSpace snapshot: ${input.label}`], { env })
+      await git(gitRoot, ["commit-tree", tree, ...parentArgs, "-m", `Hearth snapshot: ${input.label}`], { env })
     ).stdout.trim();
 
     const createdAt = new Date().toISOString();
@@ -93,7 +93,7 @@ export async function listSnapshots(input: {
     records.push({
       snapshotId: commit,
       ref,
-      label: message.replace(/^DevSpace snapshot: /, ""),
+      label: message.replace(/^Hearth snapshot: /, ""),
       createdAt: createdAt || "",
     });
   }
@@ -121,7 +121,7 @@ export async function rollbackSnapshot(input: {
     await git(gitRoot, ["rev-parse", "--verify", `${target.snapshotId}^{tree}`])
   ).stdout.trim();
 
-  const tempDir = await mkdtemp(join(tmpdir(), "devspace-rollback-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "hearth-rollback-"));
   try {
     const env = snapshotEnv(join(tempDir, "index"));
     const head = await headCommit(gitRoot);
@@ -156,9 +156,9 @@ async function headCommit(gitRoot: string): Promise<string | undefined> {
 function snapshotEnv(indexPath: string): NodeJS.ProcessEnv {
   return {
     GIT_INDEX_FILE: indexPath,
-    GIT_AUTHOR_NAME: "DevSpace",
+    GIT_AUTHOR_NAME: "Hearth",
     GIT_AUTHOR_EMAIL: `${SNAPSHOT_AUTHOR_ENV_BASE}@users.noreply.local`,
-    GIT_COMMITTER_NAME: "DevSpace",
+    GIT_COMMITTER_NAME: "Hearth",
     GIT_COMMITTER_EMAIL: `${SNAPSHOT_AUTHOR_ENV_BASE}@users.noreply.local`,
   };
 }

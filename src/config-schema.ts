@@ -1,13 +1,14 @@
 import * as z from "zod/v4";
 import { subagentsConfigSchema } from "./local-agent-config.js";
+import { fleetConfigSchema } from "./orchestration/lanes.js";
 
-export const DEVSPACE_CONFIG_VERSION = 1 as const;
-export const DEVSPACE_CONFIG_SCHEMA_URL =
-  "https://raw.githubusercontent.com/Waishnav/devspace/main/schema/v1/devspace.schema.json";
+export const HEARTH_CONFIG_VERSION = 1 as const;
+export const HEARTH_CONFIG_SCHEMA_URL =
+  "https://raw.githubusercontent.com/Waishnav/hearth/main/schema/v1/hearth.schema.json";
 
 const serverConfigSchema = z.object({
   host: z.string().trim().min(1).default("127.0.0.1"),
-  port: z.number().int().min(1).max(65_535).default(7676),
+  port: z.number().int().min(1).max(65_535).default(7176),
   publicBaseUrl: z.string().url().nullable().default(null),
   allowedHosts: z.array(z.string().trim().min(1)).default([]),
   trustProxy: z.boolean().default(false),
@@ -18,13 +19,36 @@ const serverConfigSchema = z.object({
   issuerMode: z.enum(["derived", "local"]).default("derived"),
 }).strict().prefault({});
 
+const tlsConfigSchema = z.object({
+  // Native TLS for relay-free direct exposure: when both are set, `serve`
+  // terminates HTTPS itself (e.g. behind your own domain + port forward).
+  // Leave null when running behind localhost or a tunnel that terminates TLS.
+  certFile: z.string().trim().min(1).nullable().default(null),
+  keyFile: z.string().trim().min(1).nullable().default(null),
+  // Directory served (read-only) at /.well-known/acme-challenge/ so certbot
+  // webroot mode can provision certificates while the server runs.
+  acmeDir: z.string().trim().min(1).nullable().default(null),
+}).strict().prefault({});
+
+const workspaceProfileSchema = z.object({
+  path: z.string().trim().min(1).describe("Absolute path (or ~-prefixed) this profile applies to; longest prefix wins."),
+  mode: z.enum(["readonly", "supervised", "autonomous"]).optional(),
+  sandbox: z.enum(["auto", "none"]).optional(),
+  sandboxNetwork: z.enum(["allow", "deny"]).optional(),
+  requireSandboxForAutonomous: z.boolean().optional(),
+  commandAllow: z.array(z.string().trim().min(1)).default([]).describe("Regex allowlist; when non-empty only matching commands run."),
+  commandDeny: z.array(z.string().trim().min(1)).default([]).describe("Regex denylist; matching commands are always rejected."),
+  agentsAllowed: z.boolean().optional().describe("Whether agent tools may run for this workspace. Defaults to true."),
+}).strict();
+
 const workspacesConfigSchema = z.object({
   allowedRoots: z.array(z.string().trim().min(1)).default([]),
-  worktreeRoot: z.string().trim().min(1).default("~/.devspace/worktrees"),
+  worktreeRoot: z.string().trim().min(1).default("~/.hearth/worktrees"),
+  profiles: z.array(workspaceProfileSchema).default([]),
 }).strict().prefault({});
 
 const storageConfigSchema = z.object({
-  stateDir: z.string().trim().min(1).default("~/.local/share/devspace"),
+  stateDir: z.string().trim().min(1).default("~/.local/share/hearth"),
 }).strict().prefault({});
 
 const toolsConfigSchema = z.object({
@@ -74,23 +98,29 @@ const executionConfigSchema = z.object({
   sandboxNetwork: z.enum(["allow", "deny"]).default("allow"),
   // When true, autonomous-mode tier-2/3 commands are denied unless a sandbox
   // adapter is actually available (tier 3 is always denied regardless).
-  requireSandboxForAutonomous: z.boolean().default(false),
+  // Default true (fail closed): on machines without bubblewrap/seatbelt
+  // (notably Windows, where no equivalent exists), autonomous tier-2 is
+  // denied rather than silently unsandboxed. Opt out explicitly per
+  // workspace or globally when you accept unsandboxed autonomy.
+  requireSandboxForAutonomous: z.boolean().default(true),
 }).strict().prefault({});
 
 const oauthConfigSchema = z.object({
   accessTokenTtlSeconds: z.number().int().positive().default(60 * 60),
   refreshTokenTtlSeconds: z.number().int().positive().default(30 * 24 * 60 * 60),
-  scopes: z.array(z.string().trim().min(1)).min(1).default(["devspace"]),
+  scopes: z.array(z.string().trim().min(1)).min(1).default(["hearth"]),
   allowedRedirectHosts: z.array(z.string().trim().min(1)).min(1).default([
     "chatgpt.com",
+    "claude.ai",
+    "anthropic.com",
     "localhost",
     "127.0.0.1",
   ]),
 }).strict().prefault({});
 
-export const devspaceConfigSchema = z.object({
-  $schema: z.string().url().default(DEVSPACE_CONFIG_SCHEMA_URL),
-  configVersion: z.literal(DEVSPACE_CONFIG_VERSION),
+export const hearthConfigSchema = z.object({
+  $schema: z.string().url().default(HEARTH_CONFIG_SCHEMA_URL),
+  configVersion: z.literal(HEARTH_CONFIG_VERSION),
   server: serverConfigSchema,
   workspaces: workspacesConfigSchema,
   storage: storageConfigSchema,
@@ -99,25 +129,27 @@ export const devspaceConfigSchema = z.object({
   artifacts: artifactsConfigSchema,
   skills: skillsConfigSchema,
   subagents: subagentsConfigSchema.default({ enabled: false, providers: [] }),
+  fleet: fleetConfigSchema.default({ lanes: {} }),
   execution: executionConfigSchema,
   logging: loggingConfigSchema,
+  tls: tlsConfigSchema.default({ certFile: null, keyFile: null, acmeDir: null }),
   oauth: oauthConfigSchema,
 }).strict();
 
-export type DevspaceConfig = z.output<typeof devspaceConfigSchema>;
-export type DevspaceConfigInput = z.input<typeof devspaceConfigSchema>;
-export type ToolMode = DevspaceConfig["tools"]["mode"];
+export type HearthConfig = z.output<typeof hearthConfigSchema>;
+export type HearthConfigInput = z.input<typeof hearthConfigSchema>;
+export type ToolMode = HearthConfig["tools"]["mode"];
 
-export function defaultDevspaceConfig(): DevspaceConfig {
-  return devspaceConfigSchema.parse({ configVersion: DEVSPACE_CONFIG_VERSION });
+export function defaultHearthConfig(): HearthConfig {
+  return hearthConfigSchema.parse({ configVersion: HEARTH_CONFIG_VERSION });
 }
 
-export function devspaceConfigJsonSchema(): object {
+export function hearthConfigJsonSchema(): object {
   return {
-    $id: DEVSPACE_CONFIG_SCHEMA_URL,
-    title: "DevSpace configuration",
-    description: "Versioned configuration for a local DevSpace MCP server.",
-    ...z.toJSONSchema(devspaceConfigSchema, {
+    $id: HEARTH_CONFIG_SCHEMA_URL,
+    title: "Hearth configuration",
+    description: "Versioned configuration for a local Hearth MCP server.",
+    ...z.toJSONSchema(hearthConfigSchema, {
       target: "draft-2020-12",
       io: "input",
     }),

@@ -7,6 +7,7 @@ import { TaskStore, TaskTransitionError, type TaskEvidenceEntry } from "./task-s
 import type { VerificationGateResult } from "./verification.js";
 import { detectVerificationGates, tailOutput, type VerificationGate, type VerificationResult } from "./verification.js";
 import { classifyCommand, decideExecution } from "./policy/command-policy.js";
+import { commandListVerdict, resolveExecutionForWorkspace } from "./policy/workspace-profiles.js";
 import { logEvent, commandPreview } from "./logger.js";
 import { logToolCall, resultOutputSchema, sandboxDecision, textBlock } from "./tool-surfaces/shared.js";
 import { workspaceIdDescription } from "./tool-surfaces/types.js";
@@ -20,6 +21,8 @@ import { workspaceIdDescription } from "./tool-surfaces/types.js";
 const DEFAULT_TASK_BUDGET_MS = 30 * 60 * 1000;
 const GATE_POLL_MS = 30_000;
 const MAX_GATE_WALL_MS = 10 * 60 * 1000;
+/** Repair loops are bounded: after this many failed verify rounds the task fails instead of repairing forever. */
+const MAX_REPAIR_CYCLES = 5;
 
 export interface TaskToolContext {
   config: ServerConfig;
@@ -80,15 +83,29 @@ export function registerTaskTools(target: McpRegistrationTarget, context: TaskTo
   /** Run one gate command under the policy gate, waiting for completion. */
   const runGate = async (workspaceId: string, cwd: string, gate: VerificationGate): Promise<VerificationGateResult> => {
     const startedAt = performance.now();
+    const resolved = resolveExecutionForWorkspace(config, cwd);
     const classification = classifyCommand(gate.command);
-    const decision = decideExecution({ mode: config.execution.mode, tier: classification.tier });
+    // Workspace command lists apply to verification gates too: a denied gate
+    // command fails closed rather than running outside the profile.
+    const listVerdict = commandListVerdict(resolved, gate.command);
+    if (!listVerdict.allowed) {
+      return {
+        name: gate.name,
+        command: gate.command,
+        kind: gate.kind,
+        passed: false,
+        outputTail: `Blocked by workspace policy: ${listVerdict.rule}`,
+        durationMs: Math.round(performance.now() - startedAt),
+      };
+    }
+    const decision = decideExecution({ mode: resolved.mode, tier: classification.tier });
     logEvent(config.logging, decision.decision === "allow" ? "info" : "warn", "policy_decision", {
       tool: "task_verify",
       workspaceId,
       tier: classification.tier,
       rules: classification.rules,
       decision: decision.decision,
-      mode: config.execution.mode,
+      mode: resolved.mode,
       commandPreview: commandPreview(gate.command),
     });
     if (decision.decision !== "allow") {
@@ -107,7 +124,7 @@ export function registerTaskTools(target: McpRegistrationTarget, context: TaskTo
       command: gate.command,
       cwd,
       workspaceRoot: cwd,
-      sandbox: sandboxDecision(config, classification.tier).enabled,
+      sandbox: sandboxDecision(config, classification.tier, cwd).enabled,
       yieldTimeMs: GATE_POLL_MS,
       maxOutputTokens: 4000,
     });
@@ -164,6 +181,15 @@ export function registerTaskTools(target: McpRegistrationTarget, context: TaskTo
     result.gates.filter((gate) => !gate.passed)
       .map((gate) => ({ gate: gate.name, exitCode: gate.exitCode, outputTail: gate.outputTail }));
 
+  /** Repair loops are bounded: count prior verify→repairing moves from evidence. */
+  const repairCyclesUsed = (taskId: string): number => {
+    const record = taskStore.get(taskId);
+    if (!record) return 0;
+    return record.evidence.filter((entry) =>
+      entry.kind === "note" && entry.summary.includes("verifying → repairing")
+    ).length;
+  };
+
   const workspaceOf = (workspaceId: string) => workspaces.getWorkspace(workspaceId);
 
   /**
@@ -204,11 +230,12 @@ export function registerTaskTools(target: McpRegistrationTarget, context: TaskTo
     },
     async ({ workspaceId, goal }) => {
       const workspace = workspaceOf(workspaceId);
+      const resolved = resolveExecutionForWorkspace(config, workspace.root);
       const record = taskStore.create({
         workspaceId,
         workspaceRoot: workspace.root,
         goal,
-        mode: config.execution.mode === "readonly" ? "readonly" : config.execution.mode,
+        mode: resolved.mode,
       });
       logToolCall(config, { tool: "task_create", workspaceId, success: true, durationMs: 0 });
       return {
@@ -324,6 +351,18 @@ export function registerTaskTools(target: McpRegistrationTarget, context: TaskTo
 
       if (!verification.passed) {
         const failures = failuresOf(verification);
+        if (repairCyclesUsed(taskId) >= MAX_REPAIR_CYCLES) {
+          const failed = taskStore.transition(taskId, "failed", {
+            error: `Repair budget exhausted after ${MAX_REPAIR_CYCLES} failed verification rounds: ${failures.map((failure) => failure.gate).join(", ")}. Inspect evidence and create a new task.`,
+          });
+          const extra = `Repair budget exhausted (${MAX_REPAIR_CYCLES} rounds). Task marked failed — no more automatic repair loops.\n${
+            failures.map((failure) => `— ${failure.gate} (exit ${failure.exitCode ?? "?"})\n${failure.outputTail}`).join("\n\n")
+          }`;
+          return {
+            content: [textBlock(taskText(failed, extra))],
+            structuredContent: { ...structuredTask(failed), result: taskText(failed, extra) },
+          };
+        }
         const failed = taskStore.transition(taskId, "repairing", {
           error: `Verification failed: ${failures.map((failure) => failure.gate).join(", ")}`,
         });
@@ -460,6 +499,32 @@ export function registerTaskTools(target: McpRegistrationTarget, context: TaskTo
       try {
         const cancelled = taskStore.transition(taskId, "cancelled", { error: "Cancelled by client." });
         return { content: [textBlock(taskText(cancelled))], structuredContent: structuredTask(cancelled) };
+      } catch (error) {
+        return transitionError(error, taskId);
+      }
+    },
+  );
+
+  target.registerTool(
+    "task_resume",
+    {
+      title: "Resume task",
+      description:
+        "Resume a failed task (crash recovery, repair-budget exhaustion) back to planning. Completed/cancelled tasks are terminal; in-flight tasks use the normal transitions.",
+      inputSchema: {
+        taskId: z.string().min(1),
+        reason: z.string().max(500).optional(),
+      },
+      outputSchema: taskOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ taskId, reason }) => {
+      const record = taskStore.get(taskId);
+      if (!record) return taskNotFound(taskId);
+      try {
+        const resumed = taskStore.replan(taskId, reason ?? "Resumed by client.");
+        logToolCall(config, { tool: "task_resume", success: true, durationMs: 0 });
+        return { content: [textBlock(taskText(resumed))], structuredContent: structuredTask(resumed) };
       } catch (error) {
         return transitionError(error, taskId);
       }

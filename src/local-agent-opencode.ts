@@ -23,6 +23,26 @@ import type {
 const OPENCODE_SESSION_POLL_INTERVAL_MS = 250;
 const OPENCODE_SESSION_POLL_TIMEOUT_MS = 5 * 60_000;
 
+/**
+ * Allocate a free loopback port for an opencode server instance. The SDK
+ * defaults every server to port 4096, so concurrent runtimes (and servers
+ * leaked by crashed runs) collide; a distinct port per runtime removes the
+ * whole class. Best-effort: a tiny bind-then-close race remains, and a
+ * collision surfaces as an unavailable-provider error with retry.
+ */
+export async function allocateLoopbackPort(): Promise<number> {
+  const { createServer } = await import("node:net");
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const address = probe.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
 export type OpencodeClientLike = Pick<OpencodeClient, "v2">;
 
 export interface OpencodeServerLike {
@@ -38,6 +58,13 @@ export class OpencodeRuntime implements LocalAgentRuntime {
   readonly provider = "opencode" as const;
   private alive = true;
   private closed = false;
+  /**
+   * Last agent known set on each provider session. The opencode server
+   * records an `agent-switched` message per switchAgent call, and redundant
+   * switches (e.g. right after create, which already sets the agent) fail
+   * server-side — so switch only on actual change.
+   */
+  private readonly sessionAgents = new Map<string, string>();
 
   constructor(
     private readonly client: OpencodeClientLike,
@@ -62,12 +89,17 @@ export class OpencodeRuntime implements LocalAgentRuntime {
           await assertOpencodeHealthy(this.client);
           const resumed = Boolean(input.providerSessionId);
           const initialModel = input.model ? parseOpencodeModel(input.model, input.effort) : undefined;
+          const desiredAgent = opencodeAgentFor(input.writeMode);
           const sessionId = input.providerSessionId ?? await createOpencodeSession(this.client, input, initialModel);
+          if (!input.providerSessionId) this.sessionAgents.set(sessionId, desiredAgent);
           await callbacks?.onSessionId?.(sessionId);
-          await this.client.v2.session.switchAgent({
-            sessionID: sessionId,
-            agent: opencodeAgentFor(input.writeMode),
-          }, { throwOnError: true });
+          if (this.sessionAgents.get(sessionId) !== desiredAgent) {
+            await this.client.v2.session.switchAgent({
+              sessionID: sessionId,
+              agent: desiredAgent,
+            }, { throwOnError: true });
+            this.sessionAgents.set(sessionId, desiredAgent);
+          }
 
           const model = initialModel ?? (input.effort ? await modelWithEffort(this.client, sessionId, input.effort) : undefined);
           if (model && (resumed || !initialModel)) {
@@ -145,11 +177,11 @@ export class OpencodeLocalAgentDriver implements LocalAgentDriver {
 
 async function defaultOpencodeFactory(): Promise<{ client: OpencodeClientLike; server: OpencodeServerLike }> {
   const { createOpencode } = await import("@opencode-ai/sdk/v2");
-  return createOpencode({ config: {
+  return createOpencode({ port: await allocateLoopbackPort(), config: {
     agent: {
-      devspace_read_only: opencodeAgentConfig("read_only"),
-      devspace_allowed: opencodeAgentConfig("allowed"),
-      devspace_full_access: opencodeAgentConfig("full_access"),
+      hearth_read_only: opencodeAgentConfig("read_only"),
+      hearth_allowed: opencodeAgentConfig("allowed"),
+      hearth_full_access: opencodeAgentConfig("full_access"),
     },
   } });
 }
@@ -179,10 +211,10 @@ async function createOpencodeSession(
 
 export function opencodeAgentFor(writeMode: LocalAgentRunInput["writeMode"]): string {
   switch (writeMode) {
-    case "read_only": return "devspace_read_only";
-    case "full_access": return "devspace_full_access";
+    case "read_only": return "hearth_read_only";
+    case "full_access": return "hearth_full_access";
     case "allowed":
-    case undefined: return "devspace_allowed";
+    case undefined: return "hearth_allowed";
   }
 }
 

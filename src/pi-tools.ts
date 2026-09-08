@@ -1,9 +1,7 @@
 import {
-  createBashTool,
   createEditTool,
   createReadTool,
   createWriteTool,
-  type BashToolInput,
   type EditToolInput,
   type EditToolDetails,
   type ReadToolInput,
@@ -91,12 +89,6 @@ export async function editFileTool(input: EditToolInput, context: ToolContext): 
   }, context);
 }
 
-export async function runShellTool(input: BashToolInput, context: ToolContext): Promise<ToolResponse> {
-  const tool = createBashTool(context.cwd);
-  const timeout = input.timeout === undefined ? 30 : Math.min(input.timeout, 300);
-
-  return runTool((params) => tool.execute("run_shell", params), {
-    command: input.command,
-    timeout,
-  }, context);
-}
+// runShellTool was removed: shell execution goes through
+// ProcessSessionManager (policy gate, environment allowlist, OS sandbox,
+// process journal) with no side channel. See ADR-024.

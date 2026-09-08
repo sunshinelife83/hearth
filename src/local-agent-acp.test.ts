@@ -289,7 +289,7 @@ assert.deepEqual(acpCommandArgs("copilot", { ...cachedContext, writeMode: "full_
 const missingCommandDriver = new AcpLocalAgentDriver(
   "cursor",
   process.env,
-  () => join(tmpdir(), "devspace-definitely-missing-acp-command"),
+  () => join(tmpdir(), "hearth-definitely-missing-acp-command"),
 );
 const missingCommand = await missingCommandDriver.createRuntime(cachedContext);
 assert.equal(missingCommand.isErr(), true);
@@ -299,7 +299,7 @@ if (missingCommand.isErr()) {
 }
 
 if (process.platform === "win32") {
-  const shimRoot = await mkdtemp(join(tmpdir(), "devspace-acp-shim-test-"));
+  const shimRoot = await mkdtemp(join(tmpdir(), "hearth-acp-shim-test-"));
   const binDir = join(shimRoot, "node_modules", ".bin");
   const marker = join(shimRoot, "args.json");
   const recorder = join(binDir, "record-args.cjs");
@@ -329,7 +329,7 @@ if (process.platform === "win32") {
 }
 
 if (process.platform !== "win32") {
-  const commandRoot = await mkdtemp(join(tmpdir(), "devspace-acp-command-test-"));
+  const commandRoot = await mkdtemp(join(tmpdir(), "hearth-acp-command-test-"));
   const candidate = join(commandRoot, "cursor-agent");
   const marker = join(commandRoot, "executed");
   try {

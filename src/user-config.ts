@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import {
+  chmodSync,
   existsSync,
   linkSync,
   mkdirSync,
@@ -19,72 +20,75 @@ import {
 } from "jsonc-parser";
 import * as z from "zod/v4";
 import {
-  defaultDevspaceConfig,
-  devspaceConfigSchema,
-  type DevspaceConfig,
-  type DevspaceConfigInput,
+  defaultHearthConfig,
+  hearthConfigSchema,
+  type HearthConfig,
+  type HearthConfigInput,
 } from "./config-schema.js";
 import { migrateLegacyConfig } from "./config-migration.js";
 import { expandHomePath } from "./roots.js";
 
-const devspaceAuthConfigSchema = z.object({
+const hearthAuthConfigSchema = z.object({
   ownerToken: z.string().optional(),
 }).passthrough();
 
-export type DevspaceUserConfig = DevspaceConfig;
-export type DevspaceAuthConfig = z.infer<typeof devspaceAuthConfigSchema>;
+export type HearthUserConfig = HearthConfig;
+export type HearthAuthConfig = z.infer<typeof hearthAuthConfigSchema>;
 
-export interface DevspaceFiles {
+export interface HearthFiles {
   dir: string;
   configPath: string;
   authPath: string;
   configExists: boolean;
   authExists: boolean;
-  config: DevspaceConfig;
-  auth: DevspaceAuthConfig;
+  config: HearthConfig;
+  auth: HearthAuthConfig;
   migratedLegacyConfig: boolean;
+  /** One-time adopt of a pre-rename ~/.devspace install (config + auth copied, originals kept). */
+  migratedFromDevspace: boolean;
 }
 
-export interface DevspaceConfigEdit {
+export interface HearthConfigEdit {
   path: (string | number)[];
   value: unknown;
 }
 
-export function devspaceConfigDir(env: NodeJS.ProcessEnv = process.env): string {
-  return resolve(expandHomePath(env.DEVSPACE_CONFIG_DIR ?? join(homedir(), ".devspace")));
+export function hearthConfigDir(env: NodeJS.ProcessEnv = process.env): string {
+  return resolve(expandHomePath(env.HEARTH_CONFIG_DIR ?? join(homedir(), ".hearth")));
 }
 
-export function devspaceConfigPath(env: NodeJS.ProcessEnv = process.env): string {
-  return join(devspaceConfigDir(env), "config.jsonc");
+export function hearthConfigPath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(hearthConfigDir(env), "config.jsonc");
 }
 
-export function devspaceLegacyConfigPath(env: NodeJS.ProcessEnv = process.env): string {
-  return join(devspaceConfigDir(env), "config.json");
+export function hearthLegacyConfigPath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(hearthConfigDir(env), "config.json");
 }
 
-export function devspaceLegacyConfigBackupPath(env: NodeJS.ProcessEnv = process.env): string {
-  return join(devspaceConfigDir(env), "config.json.v1.0.bak");
+export function hearthLegacyConfigBackupPath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(hearthConfigDir(env), "config.json.v1.0.bak");
 }
 
-export function devspaceAuthPath(env: NodeJS.ProcessEnv = process.env): string {
-  return join(devspaceConfigDir(env), "auth.json");
+export function hearthAuthPath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(hearthConfigDir(env), "auth.json");
 }
 
-export function devspaceSkillsDir(env: NodeJS.ProcessEnv = process.env): string {
-  return join(devspaceConfigDir(env), "skills");
+export function hearthSkillsDir(env: NodeJS.ProcessEnv = process.env): string {
+  return join(hearthConfigDir(env), "skills");
 }
 
-export function devspaceAgentsDir(env: NodeJS.ProcessEnv = process.env): string {
-  return join(devspaceConfigDir(env), "agents");
+export function hearthAgentsDir(env: NodeJS.ProcessEnv = process.env): string {
+  return join(hearthConfigDir(env), "agents");
 }
 
-export function loadDevspaceFiles(env: NodeJS.ProcessEnv = process.env): DevspaceFiles {
-  const dir = devspaceConfigDir(env);
-  const configPath = devspaceConfigPath(env);
-  const legacyConfigPath = devspaceLegacyConfigPath(env);
-  const authPath = devspaceAuthPath(env);
+export function loadHearthFiles(env: NodeJS.ProcessEnv = process.env): HearthFiles {
+  const dir = hearthConfigDir(env);
+  const configPath = hearthConfigPath(env);
+  const legacyConfigPath = hearthLegacyConfigPath(env);
+  const authPath = hearthAuthPath(env);
+  const migratedFromDevspace = migrateFromLegacyDevspaceDir(env, dir);
   const migratedLegacyConfig = !existsSync(configPath) && existsSync(legacyConfigPath)
-    ? migrateLegacyConfigFile(legacyConfigPath, configPath, devspaceLegacyConfigBackupPath(env))
+    ? migrateLegacyConfigFile(legacyConfigPath, configPath, hearthLegacyConfigBackupPath(env))
     : false;
   const configExists = existsSync(configPath);
   const authExists = existsSync(authPath);
@@ -95,35 +99,68 @@ export function loadDevspaceFiles(env: NodeJS.ProcessEnv = process.env): Devspac
     authPath,
     configExists,
     authExists,
-    config: configExists ? readJsoncConfig(configPath) : defaultDevspaceConfig(),
-    auth: authExists ? readJsonFile(authPath, devspaceAuthConfigSchema) : {},
+    config: configExists ? readJsoncConfig(configPath) : defaultHearthConfig(),
+    auth: authExists ? readJsonFile(authPath, hearthAuthConfigSchema) : {},
     migratedLegacyConfig,
+    migratedFromDevspace,
   };
 }
 
-export function writeDevspaceConfig(
-  config: DevspaceConfigInput,
+/**
+ * One-time adoption of a pre-rename DevSpace install: when the Hearth config
+ * dir has neither config nor auth but ~/.devspace does, copy both files over
+ * (owner-only permissions) and leave the originals untouched. Explicit
+ * HEARTH_CONFIG_DIR opts out of the adoption.
+ */
+function migrateFromLegacyDevspaceDir(env: NodeJS.ProcessEnv, dir: string): boolean {
+  if (env.HEARTH_CONFIG_DIR) return false;
+  if (existsSync(join(dir, "config.jsonc")) || existsSync(join(dir, "auth.json"))) return false;
+  // HEARTH_LEGACY_DEVSPACE_DIR is a test hook; production uses ~/.devspace.
+  const legacyDir = env.HEARTH_LEGACY_DEVSPACE_DIR ?? join(homedir(), ".devspace");
+  const legacyConfig = join(legacyDir, "config.jsonc");
+  const legacyAuth = join(legacyDir, "auth.json");
+  if (!existsSync(legacyConfig) && !existsSync(legacyAuth)) return false;
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    for (const file of [legacyConfig, legacyAuth]) {
+      if (!existsSync(file)) continue;
+      const dest = join(dir, basename(file));
+      writeFileSync(dest, readFileSync(file));
+      try {
+        chmodSync(dest, 0o600);
+      } catch {
+        // Non-POSIX platforms: best effort.
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function writeHearthConfig(
+  config: HearthConfigInput,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const filePath = devspaceConfigPath(env);
-  const parsed = devspaceConfigSchema.parse(config);
+  const filePath = hearthConfigPath(env);
+  const parsed = hearthConfigSchema.parse(config);
   atomicWrite(filePath, serializeConfig(parsed), 0o600);
   return filePath;
 }
 
-export function setDevspaceConfigValue(
+export function setHearthConfigValue(
   path: (string | number)[],
   value: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  return setDevspaceConfigValues([{ path, value }], env);
+  return setHearthConfigValues([{ path, value }], env);
 }
 
-export function setDevspaceConfigValues(
-  edits: DevspaceConfigEdit[],
+export function setHearthConfigValues(
+  edits: HearthConfigEdit[],
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const files = loadDevspaceFiles(env);
+  const files = loadHearthFiles(env);
   const source = files.configExists
     ? readFileSync(files.configPath, "utf8")
     : serializeConfig(files.config);
@@ -138,13 +175,13 @@ export function setDevspaceConfigValues(
   return files.configPath;
 }
 
-export function writeDevspaceAuth(
-  auth: DevspaceAuthConfig,
+export function writeHearthAuth(
+  auth: HearthAuthConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const filePath = devspaceAuthPath(env);
-  mkdirSync(devspaceConfigDir(env), { recursive: true });
-  writeJsonFile(filePath, devspaceAuthConfigSchema.parse(auth), 0o600);
+  const filePath = hearthAuthPath(env);
+  mkdirSync(hearthConfigDir(env), { recursive: true });
+  writeJsonFile(filePath, hearthAuthConfigSchema.parse(auth), 0o600);
   return filePath;
 }
 
@@ -160,11 +197,11 @@ function migrateLegacyConfigFile(
   if (existsSync(backupPath)) {
     throw new Error(
       `Unable to migrate ${legacyPath}: backup already exists at ${backupPath}. `
-      + `Move ${backupPath} out of the way, then run DevSpace again.`,
+      + `Move ${backupPath} out of the way, then run Hearth again.`,
     );
   }
 
-  let migrated: DevspaceConfig;
+  let migrated: HearthConfig;
   try {
     migrated = migrateLegacyConfig(JSON.parse(readFileSync(legacyPath, "utf8")) as unknown);
   } catch (error) {
@@ -199,32 +236,32 @@ function migrateLegacyConfigFile(
   return true;
 }
 
-function readJsoncConfig(filePath: string): DevspaceConfig {
+function readJsoncConfig(filePath: string): HearthConfig {
   try {
     return parseJsoncConfig(readFileSync(filePath, "utf8"), filePath);
   } catch (error) {
-    if (error instanceof DevspaceConfigFileError) throw error;
+    if (error instanceof HearthConfigFileError) throw error;
     throw fileError("read", filePath, error);
   }
 }
 
-function parseJsoncConfig(source: string, filePath: string): DevspaceConfig {
+function parseJsoncConfig(source: string, filePath: string): HearthConfig {
   const errors: ParseError[] = [];
   const value = parse(source, errors, { allowTrailingComma: true });
   if (errors.length > 0) {
     const first = errors[0]!;
-    throw new DevspaceConfigFileError(
+    throw new HearthConfigFileError(
       `Unable to read ${filePath}: ${printParseErrorCode(first.error)} at offset ${first.offset}`,
     );
   }
   try {
-    return devspaceConfigSchema.parse(value);
+    return hearthConfigSchema.parse(value);
   } catch (error) {
     throw fileError("read", filePath, error);
   }
 }
 
-function serializeConfig(config: DevspaceConfig): string {
+function serializeConfig(config: HearthConfig): string {
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
@@ -261,11 +298,11 @@ function writeJsonFile(filePath: string, value: unknown, mode: number): void {
 
 function fileError(action: "read" | "migrate", filePath: string, error: unknown): Error {
   const reason = error instanceof Error ? error.message : String(error);
-  return new DevspaceConfigFileError(`Unable to ${action} ${filePath}: ${reason}`);
+  return new HearthConfigFileError(`Unable to ${action} ${filePath}: ${reason}`);
 }
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-class DevspaceConfigFileError extends Error {}
+class HearthConfigFileError extends Error {}

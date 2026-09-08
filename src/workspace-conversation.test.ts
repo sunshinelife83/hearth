@@ -9,7 +9,7 @@ import { loadConfig, type ServerConfig } from "./config.js";
 import { openDatabase } from "./db/client.js";
 import { SqliteWorkspaceStore } from "./workspace-store.js";
 import { WorkspaceRegistry } from "./workspaces.js";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -154,8 +154,8 @@ test("checkout reuse survives a registry restart", async (t) => {
 
 test("a failed first context load does not consume bootstrap", async (t) => {
   const { project, registry } = await fixture(t);
-  const agentsDir = join(project, ".devspace", "agents");
-  const backupDir = join(project, ".devspace", "agents-backup");
+  const agentsDir = join(project, ".hearth", "agents");
+  const backupDir = join(project, ".hearth", "agents-backup");
 
   await breakAgentsDirectory(agentsDir, backupDir);
   try {
@@ -173,8 +173,8 @@ test("a failed first context load does not consume bootstrap", async (t) => {
 test("a context-loading failure preserves a valid checkout binding", async (t) => {
   const { project, registry } = await fixture(t);
   const first = await registry.openWorkspace(project, { conversationScopeId: "chat-1" });
-  const agentsDir = join(project, ".devspace", "agents");
-  const backupDir = join(project, ".devspace", "agents-backup");
+  const agentsDir = join(project, ".hearth", "agents");
+  const backupDir = join(project, ".hearth", "agents-backup");
 
   await breakAgentsDirectory(agentsDir, backupDir);
   try {
@@ -243,7 +243,7 @@ test("canonical checkout identity survives macOS var path aliases", { skip: plat
     return;
   }
 
-  const aliasConfig = loadConfig(writeTestDevspaceConfig(join(context.root, ".alias-config"), {
+  const aliasConfig = loadConfig(writeTestHearthConfig(join(context.root, ".alias-config"), {
     server: { port: 1 },
     workspaces: {
       allowedRoots: [context.root, macAlias],
@@ -396,17 +396,17 @@ async function fixture(
   t: TestContext,
   options: { git?: boolean } = {},
 ): Promise<WorkspaceFixture> {
-  const root = await mkdtemp(join(tmpdir(), "devspace-workspace-conversation-test-"));
+  const root = await mkdtemp(join(tmpdir(), "hearth-workspace-conversation-test-"));
   const project = join(root, "project");
   const agentDir = join(root, "agent");
   const stateDir = join(root, ".state");
   const stores = new Set<SqliteWorkspaceStore>();
 
-  await mkdir(join(project, ".devspace", "agents"), { recursive: true });
+  await mkdir(join(project, ".hearth", "agents"), { recursive: true });
   await mkdir(agentDir, { recursive: true });
   await writeFile(join(agentDir, "AGENTS.md"), "global instructions\n");
   await writeFile(join(project, "AGENTS.md"), "project instructions\n");
-  await writeFile(join(project, ".devspace", "agents", "reviewer.md"), [
+  await writeFile(join(project, ".hearth", "agents", "reviewer.md"), [
     "---",
     "name: reviewer",
     "description: Reviews project changes.",
@@ -417,7 +417,7 @@ async function fixture(
 
   if (options.git) await initializeGitRepository(project);
 
-  const config = loadConfig(writeTestDevspaceConfig(join(root, ".config"), {
+  const config = loadConfig(writeTestHearthConfig(join(root, ".config"), {
     server: { port: 1 },
     workspaces: { allowedRoots: [root], worktreeRoot: join(root, ".worktrees") },
     skills: { agentDir },
@@ -463,8 +463,8 @@ async function restoreAgentsDirectory(agentsDir: string, backupDir: string): Pro
 async function initializeGitRepository(root: string): Promise<void> {
   await writeFile(join(root, "README.md"), "hello\n");
   await git(root, ["init"]);
-  await git(root, ["config", "user.email", "devspace@example.com"]);
-  await git(root, ["config", "user.name", "DevSpace Test"]);
+  await git(root, ["config", "user.email", "hearth@example.com"]);
+  await git(root, ["config", "user.name", "Hearth Test"]);
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "Initial commit"]);
 }

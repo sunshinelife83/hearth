@@ -111,7 +111,7 @@ const TIER2_SUPERVISED_MESSAGE =
   "then retry the exact same command with the input flag approvedByUser set to true.";
 
 const TIER3_MESSAGE =
-  "This command is always blocked by DevSpace policy (privilege escalation, system management, " +
+  "This command is always blocked by Hearth policy (privilege escalation, system management, " +
   "remote script execution, or shell profile modification). It cannot be approved.";
 
 export function decideExecution(input: {

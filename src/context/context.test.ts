@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { loadConfig } from "../config.js";
 import { buildLocalMcpServer } from "../stdio-server.js";
-import { writeTestDevspaceConfig } from "../test-support/config.test.js";
+import { writeTestHearthConfig } from "../test-support/config.test.js";
 import { buildRepoMap, formatRepoMap } from "./repo-map.js";
 
 describe("context engine (repo map + search)", () => {
@@ -17,7 +17,7 @@ describe("context engine (repo map + search)", () => {
   let workspaceRoot = "";
 
   before(async () => {
-    root = await mkdtemp(join(tmpdir(), "devspace-context-test-"));
+    root = await mkdtemp(join(tmpdir(), "hearth-context-test-"));
     workspaceRoot = join(root, "project");
     await mkdir(join(workspaceRoot, "src"), { recursive: true });
     await mkdir(join(workspaceRoot, "node_modules"), { recursive: true });
@@ -27,8 +27,8 @@ describe("context engine (repo map + search)", () => {
     // node_modules must be invisible to the map and search.
     await writeFile(join(workspaceRoot, "node_modules", "noise.ts"), "export const login = 'noise';\n");
 
-    const env = writeTestDevspaceConfig(join(root, "config"), {
-      server: { host: "127.0.0.1", port: 7676, publicBaseUrl: null },
+    const env = writeTestHearthConfig(join(root, "config"), {
+      server: { host: "127.0.0.1", port: 7176, publicBaseUrl: null },
       workspaces: { allowedRoots: [workspaceRoot] },
       storage: { stateDir: join(root, "state") },
       tools: { mode: "claude" },

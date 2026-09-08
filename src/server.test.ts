@@ -18,7 +18,7 @@ import { createMcpServer, createServer } from "./server.js";
 import { TaskStore } from "./task-store.js";
 import { SqliteWorkspaceStore } from "./workspace-store.js";
 import { WorkspaceRegistry } from "./workspaces.js";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -34,8 +34,9 @@ test("tool modes expose the expected host-facing tool surface", async (t) => {
         "create_snapshot", "list_snapshots", "rollback_snapshot",
         "agent_start", "agent_status", "agent_output", "agent_send",
         "agent_pause", "agent_resume", "agent_stop", "agent_cancel", "agent_list",
+        "fleet_status", "fleet_approve",
         "task_create", "task_plan", "task_status", "task_list",
-        "task_verify", "task_complete", "task_cancel",
+        "task_verify", "task_complete", "task_cancel", "task_resume",
         "context_overview", "search",
       ],
     },
@@ -46,8 +47,9 @@ test("tool modes expose the expected host-facing tool surface", async (t) => {
         "create_snapshot", "list_snapshots", "rollback_snapshot",
         "agent_start", "agent_status", "agent_output", "agent_send",
         "agent_pause", "agent_resume", "agent_stop", "agent_cancel", "agent_list",
+        "fleet_status", "fleet_approve",
         "task_create", "task_plan", "task_status", "task_list",
-        "task_verify", "task_complete", "task_cancel",
+        "task_verify", "task_complete", "task_cancel", "task_resume",
         "context_overview", "search",
       ],
     },
@@ -165,7 +167,7 @@ test("show_changes can reopen a historical review without advancing the checkpoi
   const reopened = await context.client.callTool({
     name: "show_changes",
     arguments: { workspaceId },
-    _meta: { "devspace/reviewRef": reviewRef },
+    _meta: { "hearth/reviewRef": reviewRef },
   } as Parameters<Client["callTool"]>[0]);
   assert.equal(structuredContent(reopened).reviewRef, reviewRef);
   assert.match(
@@ -308,7 +310,7 @@ test("open_workspace scopes checkout reuse to OpenAI session metadata", async (t
 test("HTTP endpoint serves modern MCP and stateless legacy clients", async (t) => {
   const { root, localBaseUrl, accessToken } = await httpServerFixture(
     t,
-    "devspace-modern-http-test-",
+    "hearth-modern-http-test-",
   );
 
   const unauthenticated = await postModernMcp(
@@ -391,7 +393,7 @@ test("HTTP endpoint serves modern MCP and stateless legacy clients", async (t) =
       params: {
         protocolVersion: "2025-06-18",
         capabilities: {},
-        clientInfo: { name: "devspace-legacy-test", version: "1.0.0" },
+        clientInfo: { name: "hearth-legacy-test", version: "1.0.0" },
       },
     }),
   });
@@ -421,7 +423,7 @@ test("HTTP endpoint serves modern MCP and stateless legacy clients", async (t) =
 test("server shutdown waits for an active MCP tool call", async (t) => {
   const { root, localBaseUrl, accessToken, running } = await httpServerFixture(
     t,
-    "devspace-shutdown-test-",
+    "hearth-shutdown-test-",
   );
   const opened = await postModernMcp(
     localBaseUrl,
@@ -490,7 +492,7 @@ async function httpServerFixture(
 ): Promise<HttpServerFixture> {
   const root = await mkdtemp(join(tmpdir(), prefix));
   const ownerToken = "test-owner-token-that-is-long-enough";
-  const config = loadConfig(writeTestDevspaceConfig(join(root, ".config"), {
+  const config = loadConfig(writeTestHearthConfig(join(root, ".config"), {
     server: {
       port: 1,
       publicBaseUrl: "https://example.test",
@@ -534,16 +536,16 @@ async function fixture(
     uiEnabled?: boolean;
   } = {},
 ): Promise<ServerFixture> {
-  const root = await mkdtemp(join(tmpdir(), "devspace-server-test-"));
+  const root = await mkdtemp(join(tmpdir(), "hearth-server-test-"));
   const project = join(root, "project");
   const agentDir = join(root, "agent");
   const stateDir = join(root, ".state");
 
-  await mkdir(join(project, ".devspace", "agents"), { recursive: true });
+  await mkdir(join(project, ".hearth", "agents"), { recursive: true });
   await mkdir(agentDir, { recursive: true });
   await writeFile(join(agentDir, "AGENTS.md"), "global instructions\n");
   await writeFile(join(project, "AGENTS.md"), "project instructions\n");
-  await writeFile(join(project, ".devspace", "agents", "reviewer.md"), [
+  await writeFile(join(project, ".hearth", "agents", "reviewer.md"), [
     "---",
     "name: reviewer",
     "description: Reviews project changes.",
@@ -555,8 +557,8 @@ async function fixture(
   if (options.git) {
     await writeFile(join(project, "README.md"), "hello\n");
     await git(project, ["init"]);
-    await git(project, ["config", "user.email", "devspace@example.com"]);
-    await git(project, ["config", "user.name", "DevSpace Test"]);
+    await git(project, ["config", "user.email", "hearth@example.com"]);
+    await git(project, ["config", "user.name", "Hearth Test"]);
     await git(project, ["add", "."]);
     await git(project, ["commit", "-m", "Initial commit"]);
   }
@@ -564,7 +566,7 @@ async function fixture(
   const initialProviderAvailability = typeof options.localAgentProviders === "function"
     ? options.localAgentProviders()
     : options.localAgentProviders ?? [];
-  const loadedConfig = loadConfig(writeTestDevspaceConfig(join(root, ".config"), {
+  const loadedConfig = loadConfig(writeTestHearthConfig(join(root, ".config"), {
     server: { port: 1 },
     workspaces: { allowedRoots: [root], worktreeRoot: join(root, ".worktrees") },
     skills: { agentDir },
@@ -608,7 +610,7 @@ async function fixture(
     new TaskStore(stateDir),
   );
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "devspace-test-client", version: "1.0.0" });
+  const client = new Client({ name: "hearth-test-client", version: "1.0.0" });
   await Promise.all([
     client.connect(clientTransport),
     server.connect(serverTransport),
@@ -654,13 +656,13 @@ async function issueTestAccessToken(
 ): Promise<string> {
   const redirectUri = "http://127.0.0.1/callback";
   const resource = new URL("/mcp", publicBaseUrl).href;
-  const verifier = "devspace-modern-protocol-test-verifier-0123456789";
+  const verifier = "hearth-modern-protocol-test-verifier-0123456789";
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const registration = await fetch(`${localBaseUrl}/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      client_name: "DevSpace modern protocol test",
+      client_name: "Hearth modern protocol test",
       redirect_uris: [redirectUri],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
@@ -677,7 +679,7 @@ async function issueTestAccessToken(
     redirect_uri: redirectUri,
     code_challenge: challenge,
     code_challenge_method: "S256",
-    scope: "devspace",
+    scope: "hearth",
     resource,
     state: "modern-test",
   });
@@ -752,7 +754,7 @@ function postModernMcp(
           "io.modelcontextprotocol/protocolVersion": "2026-07-28",
           "io.modelcontextprotocol/clientCapabilities": {},
           "io.modelcontextprotocol/clientInfo": {
-            name: "devspace-modern-http-test",
+            name: "hearth-modern-http-test",
             version: "1.0.0",
           },
         },

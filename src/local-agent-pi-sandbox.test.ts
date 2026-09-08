@@ -13,12 +13,12 @@ import {
 } from "./local-agent-pi-sandbox.js";
 
 const dependencies = await SandboxManager.checkDependenciesAsync();
-if (process.env.DEVSPACE_REQUIRE_PI_SANDBOX === "1") {
+if (process.env.HEARTH_REQUIRE_PI_SANDBOX === "1") {
   assert.equal(SandboxManager.isSupportedPlatform(), true, "Pi sandbox integration is required on this CI lane");
   assert.deepEqual(dependencies.errors, [], "Pi sandbox dependencies must be available on this CI lane");
 }
 if (SandboxManager.isSupportedPlatform() && dependencies.errors.length === 0) {
-  const root = await mkdtemp(join(tmpdir(), "devspace-pi-sandbox-test-"));
+  const root = await mkdtemp(join(tmpdir(), "hearth-pi-sandbox-test-"));
   const workspace = join(root, "workspace");
   mkdirSync(workspace);
   const outside = join(root, "outside.txt");

@@ -4,19 +4,19 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } fr
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const tsxRoot = join(projectRoot, "node_modules", "tsx");
 
 for (const entrypoint of [
   {
-    bin: "devspace.js",
+    bin: "hearth.js",
     source: "src/cli.ts",
     dist: "dist/cli.js",
   },
   {
-    bin: "devspace-agentd.js",
+    bin: "hearth-agentd.js",
     source: "src/local-agent-daemon-main.ts",
     dist: "dist/local-agent-daemon-main.js",
   },
@@ -28,10 +28,10 @@ testLinkedCheckoutReadsCurrentConfig();
 testMissingSourceRuntimeFailsClosed();
 
 function testLinkedCheckoutReadsCurrentConfig(): void {
-  const root = mkdtempSync(join(tmpdir(), "devspace-bin-config-test-"));
+  const root = mkdtempSync(join(tmpdir(), "hearth-bin-config-test-"));
   try {
-    const env = writeTestDevspaceConfig(root, { tools: { mode: "codex" } });
-    const output = execFileSync(process.execPath, [join(projectRoot, "bin", "devspace.js"), "config", "get"], {
+    const env = writeTestHearthConfig(root, { tools: { mode: "codex" } });
+    const output = execFileSync(process.execPath, [join(projectRoot, "bin", "hearth.js"), "config", "get"], {
       encoding: "utf8",
       env: { ...process.env, ...env },
     });
@@ -43,7 +43,7 @@ function testLinkedCheckoutReadsCurrentConfig(): void {
 }
 
 function testMissingSourceRuntimeFailsClosed(): void {
-  const root = mkdtempSync(join(tmpdir(), "devspace-bin-missing-tsx-test-"));
+  const root = mkdtempSync(join(tmpdir(), "hearth-bin-missing-tsx-test-"));
   try {
     cpSync(join(projectRoot, "bin"), join(root, "bin"), { recursive: true });
     mkdirSync(join(root, "src"), { recursive: true });
@@ -53,7 +53,7 @@ function testMissingSourceRuntimeFailsClosed(): void {
     writeFileSync(join(root, "dist", "cli.js"), 'console.log("stale-dist");\n');
 
     assert.throws(
-      () => execFileSync(process.execPath, [join(root, "bin", "devspace.js")], { encoding: "utf8", stdio: "pipe" }),
+      () => execFileSync(process.execPath, [join(root, "bin", "hearth.js")], { encoding: "utf8", stdio: "pipe" }),
       /source checkout.*tsx.*pnpm install/is,
     );
   } finally {
@@ -62,7 +62,7 @@ function testMissingSourceRuntimeFailsClosed(): void {
 }
 
 function testLauncher(entrypoint: { bin: string; source: string; dist: string }): void {
-  const root = mkdtempSync(join(tmpdir(), "devspace-bin-launcher-test-"));
+  const root = mkdtempSync(join(tmpdir(), "hearth-bin-launcher-test-"));
   try {
     cpSync(join(projectRoot, "bin"), join(root, "bin"), { recursive: true });
     mkdirSync(dirname(join(root, entrypoint.source)), { recursive: true });

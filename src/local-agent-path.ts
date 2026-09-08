@@ -1,14 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { delimiter, resolve, sep } from "node:path";
 
-export function removeDevspaceNodeModulesBinFromPath(pathValue: string): string {
+export function removeHearthNodeModulesBinFromPath(pathValue: string): string {
   return pathValue
     .split(delimiter)
-    .filter((entry) => entry && !isDevspaceNodeModulesBin(entry))
+    .filter((entry) => entry && !isHearthNodeModulesBin(entry))
     .join(delimiter);
 }
 
-function isDevspaceNodeModulesBin(pathEntry: string): boolean {
+function isHearthNodeModulesBin(pathEntry: string): boolean {
   const resolvedEntry = resolve(pathEntry);
   if (!resolvedEntry.endsWith(`${sep}node_modules${sep}.bin`)) {
     return false;
@@ -19,7 +19,7 @@ function isDevspaceNodeModulesBin(pathEntry: string): boolean {
 
   try {
     const packageInfo = JSON.parse(readFileSync(packageJson, "utf8")) as { name?: unknown };
-    return packageInfo.name === "@waishnav/devspace";
+    return packageInfo.name === "@waishnav/hearth";
   } catch {
     return false;
   }

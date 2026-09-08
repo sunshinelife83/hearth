@@ -34,7 +34,12 @@ function redirectHostAllowed(redirectUri: string, allowedHosts: string[]): boole
   }
 
   if (["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)) return true;
-  return allowedHosts.includes(parsed.hostname);
+  const host = parsed.hostname.toLowerCase();
+  return allowedHosts.some((allowed) => {
+    const base = allowed.trim().toLowerCase().replace(/^\./, "");
+    if (!base) return false;
+    return host === base || host.endsWith(`.${base}`);
+  });
 }
 
 export class SqliteOAuthStore {
@@ -58,13 +63,13 @@ export class SqliteOAuthStore {
     allowedRedirectHosts: string[],
   ): OAuthClientInformationFull {
     if (!client.redirect_uris.every((uri) => redirectHostAllowed(String(uri), allowedRedirectHosts))) {
-      throw new InvalidRequestError("Client redirect_uri is not allowed for this DevSpace server");
+      throw new InvalidRequestError("Client redirect_uri is not allowed for this Hearth server");
     }
 
     const now = Math.floor(Date.now() / 1000);
     const registered: OAuthClientInformationFull = {
       ...client,
-      client_id: `devspace-${randomUUID()}`,
+      client_id: `hearth-${randomUUID()}`,
       client_id_issued_at: now,
       token_endpoint_auth_method: client.token_endpoint_auth_method ?? "none",
       grant_types: client.grant_types ?? ["authorization_code", "refresh_token"],

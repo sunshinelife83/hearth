@@ -348,6 +348,19 @@ export function agentErrorFromPayload(payload: {
   }
 }
 
+/**
+ * One-line cause summary for error messages. A bare "execution failed" hides
+ * the actual provider failure from dashboards and reviewers; the bounded
+ * cause text is what makes failures diagnosable.
+ */
+function causeSummary(cause: unknown): string | undefined {
+  const raw = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : undefined;
+  if (!raw) return undefined;
+  const flat = raw.replace(/\s+/g, " ").trim();
+  if (!flat) return undefined;
+  return flat.length > 300 ? `${flat.slice(0, 297)}...` : flat;
+}
+
 export function providerErrorFromCause(input: {
   provider: LocalAgentProvider;
   agentId?: string;
@@ -387,7 +400,9 @@ export function providerErrorFromCause(input: {
     operation: input.operation,
     retryable: false,
     cause: input.cause,
-    message: `${displayProvider(input.provider)} agent execution failed.`,
+    message: causeSummary(input.cause)
+      ? `${displayProvider(input.provider)} agent execution failed: ${causeSummary(input.cause)}`
+      : `${displayProvider(input.provider)} agent execution failed.`,
   });
 }
 
@@ -442,8 +457,7 @@ function unavailableCauseKind(error: unknown): "permanent" | "transient" | undef
   return undefined;
 }
 
-function displayProvider(provider: LocalAgentProvider): string {
-  switch (provider) {
+function displayProvider(provider: LocalAgentProvider): string {  switch (provider) {
     case "codex": return "Codex";
     case "claude": return "Claude";
     case "opencode": return "OpenCode";

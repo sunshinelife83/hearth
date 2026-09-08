@@ -85,7 +85,7 @@ function registerApplyPatchTool(context: ToolRegistrationContext): void {
     {
       title: "Apply patch",
       description:
-        "Apply one Codex-style patch in a workspace. Supports adding, overwriting, updating, deleting, and moving files. Use this for all file modifications. Paths must be relative to the workspace.",
+        "Apply one structured patch in a workspace. Supports adding, overwriting, updating, deleting, and moving files. Use this for all file modifications. Paths must be relative to the workspace.",
       inputSchema: {
         workspaceId: z.string().describe(workspaceIdDescription),
         patch: z
@@ -211,7 +211,12 @@ function registerCodexProcessTools(context: ToolRegistrationContext): void {
       approvedByUser,
     }) => {
       const startedAt = performance.now();
-      const verdict = enforceShellPolicy(config, { tool: "exec_command", workspaceId, command: cmd }, approvedByUser);
+      const workspace = workspaces.getWorkspace(workspaceId);
+      const verdict = enforceShellPolicy(
+        config,
+        { tool: "exec_command", workspaceId, command: cmd, workspaceRoot: workspace.root },
+        approvedByUser,
+      );
       if (verdict.denial) {
         logEvent(config.logging, "info", "tool_call", {
           tool: "exec_command",
@@ -222,7 +227,7 @@ function registerCodexProcessTools(context: ToolRegistrationContext): void {
         });
         return verdict.denial;
       }
-      const sandbox = sandboxDecision(config, verdict.classification.tier);
+      const sandbox = sandboxDecision(config, verdict.classification.tier, workspace.root);
       if (sandbox.denialReason) {
         return {
           content: [textBlock(sandbox.denialReason)],

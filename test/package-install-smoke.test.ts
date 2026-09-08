@@ -4,14 +4,14 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { writeTestDevspaceConfig } from "../src/test-support/config.test.js";
+import { writeTestHearthConfig } from "../src/test-support/config.test.js";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 
 testPackedPackageLaunchers();
 
 function testPackedPackageLaunchers(): void {
-  const root = mkdtempSync(join(tmpdir(), "devspace-packed-bin-test-"));
+  const root = mkdtempSync(join(tmpdir(), "hearth-packed-bin-test-"));
   const installRoot = join(root, "install");
   try {
     mkdirSync(installRoot, { recursive: true });
@@ -40,23 +40,23 @@ function testPackedPackageLaunchers(): void {
     });
 
     const configRoot = join(root, "config");
-    const env = writeTestDevspaceConfig(configRoot, {
+    const env = writeTestHearthConfig(configRoot, {
       storage: { stateDir: join(root, "state") },
       workspaces: { allowedRoots: [root], worktreeRoot: join(root, "worktrees") },
       skills: { agentDir: join(root, "agents") },
     });
-    const cliOutput = execInstalledBin(installRoot, "devspace", ["config", "get"], {
+    const cliOutput = execInstalledBin(installRoot, "hearth", ["config", "get"], {
       ...process.env,
       ...env,
     });
     const config = JSON.parse(cliOutput) as { tools?: { mode?: string } };
     assert.equal(config.tools?.mode, "codex");
 
-    execInstalledBin(installRoot, "devspace-agentd", [], {
+    execInstalledBin(installRoot, "hearth-agentd", [], {
       ...process.env,
       ...env,
-      DEVSPACE_AGENTD_IDLE_TIMEOUT_MS: "0",
-      DEVSPACE_AGENTD_SHUTDOWN_TIMEOUT_MS: "1000",
+      HEARTH_AGENTD_IDLE_TIMEOUT_MS: "0",
+      HEARTH_AGENTD_SHUTDOWN_TIMEOUT_MS: "1000",
     });
   } finally {
     rmSync(root, { recursive: true, force: true });

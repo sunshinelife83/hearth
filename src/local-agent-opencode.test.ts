@@ -92,7 +92,7 @@ assert.equal(secondRecord.providerSessionId, "session_2");
 assert.equal(secondRecord.finalResponse, "response:session_2");
 assert.deepEqual(createInputs[0], {
   location: { directory: "/tmp/project" },
-  agent: "devspace_allowed",
+  agent: "hearth_allowed",
   model: { providerID: "anthropic", id: "sonnet", variant: "high" },
 });
 assert.deepEqual(promptInputs[0], {
@@ -118,7 +118,7 @@ assert.deepEqual(switchInputs[0], {
   sessionID: "session_1",
   model: { providerID: "anthropic", id: "sonnet", variant: "low" },
 });
-assert.deepEqual(agentInputs[0], { sessionID: "session_1", agent: "devspace_allowed" });
+assert.equal(agentInputs.length, 0, "no switchAgent when the runtime already knows the session agent (fresh sessions set it at create, resumes hit the cache)");
 
 let readinessActiveCalls = 0;
 let readinessWaitCalls = 0;
@@ -250,8 +250,8 @@ assert.ok(
 );
 await longSessionPool.close();
 
-assert.equal(opencodeAgentFor("read_only"), "devspace_read_only");
-assert.equal(opencodeAgentFor("full_access"), "devspace_full_access");
+assert.equal(opencodeAgentFor("read_only"), "hearth_read_only");
+assert.equal(opencodeAgentFor("full_access"), "hearth_full_access");
 assert.deepEqual(opencodePermissionFor("allowed"), {
   read: "allow",
   edit: "allow",
@@ -359,3 +359,36 @@ await recoveringPool.close();
 await pool.close();
 await pool.close();
 assert.equal(closeCalls, 1, "shared OpenCode server closes once");
+
+{
+  const { allocateLoopbackPort } = await import("./local-agent-opencode.js");
+  const ports = new Set<number>();
+  for (let i = 0; i < 3; i += 1) {
+    const port = await allocateLoopbackPort();
+    assert.ok(port > 1024 && port < 65536, `usable ephemeral port, got ${port}`);
+    ports.add(port);
+  }
+  assert.equal(ports.size, 3, "each runtime gets a distinct server port (no shared 4096 collisions)");
+}
+
+{
+  // A recreated runtime (empty agent cache, e.g. after eviction) switches once
+  // for a resumed session whose agent it has never seen, then caches it.
+  const freshPool = new LocalAgentRuntimePool();
+  try {
+    await freshPool.run(driver, {
+      agentId: "agt_recreated",
+      provider: "opencode",
+      workspaceRoot: "/tmp/project",
+    }, {
+      prompt: "resume after eviction",
+      workspaceRoot: "/tmp/project",
+      providerSessionId: "session_1",
+    });
+    const switches = agentInputs.filter((input) => (input as { sessionID?: string }).sessionID === "session_1");
+    assert.equal(switches.length, 1, "unknown session agent switches exactly once");
+    assert.deepEqual(switches[0], { sessionID: "session_1", agent: "hearth_allowed" });
+  } finally {
+    await freshPool.close();
+  }
+}

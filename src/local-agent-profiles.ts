@@ -51,8 +51,8 @@ export async function loadLocalAgentProfiles(
   if (!config.subagents.enabled) return [];
 
   const profileDirs = [
-    config.devspaceAgentsDir,
-    join(workspaceRoot, ".devspace", "agents"),
+    config.hearthAgentsDir,
+    join(workspaceRoot, ".hearth", "agents"),
   ];
   const profilesByName = new Map<string, LocalAgentProfile>();
 

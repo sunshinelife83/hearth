@@ -27,7 +27,7 @@ jobs:
           - windows-latest
 
     env:
-      DEVSPACE_OAUTH_OWNER_TOKEN: ci-owner-token-that-is-long-enough
+      HEARTH_OAUTH_OWNER_TOKEN: ci-owner-token-that-is-long-enough
 
     steps:
       - name: Checkout
@@ -57,7 +57,7 @@ jobs:
 
       - name: Test
         env:
-          DEVSPACE_REQUIRE_PI_SANDBOX: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
+          HEARTH_REQUIRE_PI_SANDBOX: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
         run: pnpm test
 
       - name: Build

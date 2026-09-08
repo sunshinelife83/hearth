@@ -36,7 +36,7 @@ const ACP_INITIALIZE_TIMEOUT_MS = 10_000;
 const ACP_GROK_PROMPT_COMPLETION_TIMEOUT_MS = 10 * 60_000;
 const require = createRequire(import.meta.url);
 const spawn = require("cross-spawn") as typeof import("node:child_process").spawn;
-const DEVSPACE_VERSION = readDevspaceVersion();
+const HEARTH_VERSION = readHearthVersion();
 
 const observeChildError = (): void => {};
 
@@ -402,14 +402,14 @@ export class AcpRuntime implements LocalAgentRuntime {
   }
 
   private additionalDirectoryParams(): { additionalDirectories?: string[] } {
-    // DevSpace currently authorizes exactly one workspace root per agent turn.
+    // Hearth currently authorizes exactly one workspace root per agent turn.
     // Do not advertise an empty additional-directory scope to ACP providers.
     return {};
   }
 
   private nextPromptId(): string {
     this.promptSequence += 1;
-    return `devspace-grok-prompt-${this.promptSequence}`;
+    return `hearth-grok-prompt-${this.promptSequence}`;
   }
 }
 
@@ -501,7 +501,7 @@ export class AcpLocalAgentDriver implements LocalAgentDriver {
           const grokCompletionRegistry = this.provider === "grok"
             ? new GrokPromptCompletionRegistry()
             : undefined;
-          const app = client({ name: "DevSpace" })
+          const app = client({ name: "Hearth" })
             .onRequest(methods.client.session.requestPermission, (context) => {
               const writeMode = sessionWriteModes.get(context.params.sessionId);
               const selected = selectAcpPermissionOption(context.params.options, writeMode, this.provider);
@@ -536,7 +536,7 @@ export class AcpLocalAgentDriver implements LocalAgentDriver {
           const init = await withTimeout(Promise.race([
             connection.agent.request(methods.agent.initialize, {
               protocolVersion: 1,
-              clientInfo: { name: "DevSpace", version: DEVSPACE_VERSION },
+              clientInfo: { name: "Hearth", version: HEARTH_VERSION },
               clientCapabilities: {},
             }),
             startupError.then((error) => { throw error; }),
@@ -877,10 +877,10 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
   }
 }
 
-function readDevspaceVersion(): string {
+function readHearthVersion(): string {
   const packageJson = require("../package.json") as { version?: unknown };
   if (typeof packageJson.version !== "string" || !packageJson.version) {
-    throw new Error("Unable to read DevSpace package version.");
+    throw new Error("Unable to read Hearth package version.");
   }
   return packageJson.version;
 }

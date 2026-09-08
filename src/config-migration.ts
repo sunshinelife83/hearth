@@ -1,8 +1,8 @@
 import * as z from "zod/v4";
 import {
-  DEVSPACE_CONFIG_VERSION,
-  devspaceConfigSchema,
-  type DevspaceConfig,
+  HEARTH_CONFIG_VERSION,
+  hearthConfigSchema,
+  type HearthConfig,
 } from "./config-schema.js";
 import { storedSubagentsConfigSchema } from "./local-agent-config.js";
 import { LOCAL_AGENT_PROVIDERS } from "./local-agent-profiles.js";
@@ -43,7 +43,7 @@ const LEGACY_CONFIG_KEYS = new Set([
   "ui",
 ]);
 
-export function migrateLegacyConfig(value: unknown): DevspaceConfig {
+export function migrateLegacyConfig(value: unknown): HearthConfig {
   const legacy = legacyConfigSchema.parse(value);
   const unsupportedKeys = Object.keys(legacy).filter((key) => !LEGACY_CONFIG_KEYS.has(key));
   if (unsupportedKeys.length > 0) {
@@ -52,8 +52,8 @@ export function migrateLegacyConfig(value: unknown): DevspaceConfig {
     );
   }
 
-  return devspaceConfigSchema.parse({
-    configVersion: DEVSPACE_CONFIG_VERSION,
+  return hearthConfigSchema.parse({
+    configVersion: HEARTH_CONFIG_VERSION,
     server: definedEntries({
       host: legacy.host,
       port: legacy.port,

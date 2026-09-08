@@ -23,7 +23,7 @@ import {
 import type { RunOverrides, StartLocalAgentInput } from "./local-agent-manager.js";
 import type { LocalAgentRecord } from "./local-agent-store.js";
 
-const root = await mkdtemp(join(tmpdir(), "devspace-agentd-test-"));
+const root = await mkdtemp(join(tmpdir(), "hearth-agentd-test-"));
 const record: LocalAgentRecord = {
   id: "agt_test",
   workspaceId: "ws_test",
@@ -143,7 +143,7 @@ assert.deepEqual(
 
 assert.deepEqual(
   localAgentDaemonEnvironment("/alternate/config", { PATH: "/bin" }),
-  { PATH: "/bin", DEVSPACE_CONFIG_DIR: "/alternate/config" },
+  { PATH: "/bin", HEARTH_CONFIG_DIR: "/alternate/config" },
   "the daemon must reload the same persisted configuration as its client",
 );
 

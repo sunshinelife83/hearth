@@ -188,7 +188,7 @@ body {
 }
 
 .remove {
-  color: var(--color-danger-text, #ee7676);
+  color: var(--color-danger-text, #ee7176);
 }
 
 .chevron {
@@ -709,8 +709,8 @@ body {
 }
 
 .review-file-kind.deleted {
-  background: color-mix(in srgb, var(--color-danger-text, #ee7676) 12%, transparent);
-  color: var(--color-danger-text, #ee7676);
+  background: color-mix(in srgb, var(--color-danger-text, #ee7176) 12%, transparent);
+  color: var(--color-danger-text, #ee7176);
 }
 
 .review-single-file {
@@ -784,7 +784,7 @@ body {
 }
 
 .status.error {
-  color: var(--color-danger-text, #ee7676);
+  color: var(--color-danger-text, #ee7176);
 }
 
 .pierre-diff {

@@ -40,7 +40,7 @@ export type LocalAgentTarget =
 export function parseLocalAgentRunArgs(args: string[]): ParsedLocalAgentRunArgs {
   const parsed = parseAgentPromptArgs(
     args,
-    'Usage: devspace agents run <profile-or-provider> [--model <model>] [--effort <level>] "<prompt>"',
+    'Usage: hearth agents run <profile-or-provider> [--model <model>] [--effort <level>] "<prompt>"',
   );
   return parsed;
 }
@@ -48,7 +48,7 @@ export function parseLocalAgentRunArgs(args: string[]): ParsedLocalAgentRunArgs 
 export function parseLocalAgentContinueArgs(args: string[]): ParsedLocalAgentContinueArgs {
   const parsed = parseAgentPromptArgs(
     args,
-    'Usage: devspace agents continue <id> [--model <model>] [--effort <level>] "<prompt>"',
+    'Usage: hearth agents continue <id> [--model <model>] [--effort <level>] "<prompt>"',
   );
   return { agentId: parsed.target, prompt: parsed.prompt, model: parsed.model, effort: parsed.effort };
 }

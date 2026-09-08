@@ -3,7 +3,7 @@ import type { ProcessSessionManager } from "../process-sessions.js";
 import type { ServerConfig } from "../config.js";
 import type { WorkspaceRegistry } from "../workspaces.js";
 
-export const WORKSPACE_APP_URI = "ui://devspace/workspace-app.html";
+export const WORKSPACE_APP_URI = "ui://hearth/workspace-app.html";
 
 export const toolNames = {
   openWorkspace: "open_workspace",

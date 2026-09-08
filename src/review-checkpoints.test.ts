@@ -22,7 +22,7 @@ test("a clean workspace reports no changes from the last-shown checkpoint", asyn
 
 test("initialization reports whether aggregate review is available", async (t) => {
   const gitRoot = await committedRepository(t);
-  const plainRoot = await mkdtemp(join(tmpdir(), "devspace-review-plain-test-"));
+  const plainRoot = await mkdtemp(join(tmpdir(), "hearth-review-plain-test-"));
   t.after(() => rm(plainRoot, { recursive: true, force: true }));
   const manager = createReviewCheckpointManager();
 
@@ -113,7 +113,7 @@ test("review refs are scoped to the workspace review history", async (t) => {
   );
   await assert.rejects(
     () => readReviewRef(root, head),
-    /Unknown DevSpace review reference/,
+    /Unknown Hearth review reference/,
   );
 });
 
@@ -262,11 +262,11 @@ test("an unborn repository becomes reviewable after its first commit", async (t)
 });
 
 async function committedRepository(t: TestContext): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "devspace-review-checkpoints-test-"));
+  const root = await mkdtemp(join(tmpdir(), "hearth-review-checkpoints-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await git(root, ["init"]);
-  await git(root, ["config", "user.email", "devspace@example.com"]);
-  await git(root, ["config", "user.name", "DevSpace Test"]);
+  await git(root, ["config", "user.email", "hearth@example.com"]);
+  await git(root, ["config", "user.name", "Hearth Test"]);
   await writeFile(join(root, "README.md"), "hello\n");
   await git(root, ["add", "README.md"]);
   await git(root, ["commit", "-m", "Initial commit"]);
@@ -274,11 +274,11 @@ async function committedRepository(t: TestContext): Promise<string> {
 }
 
 async function unbornRepository(t: TestContext): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "devspace-review-unborn-test-"));
+  const root = await mkdtemp(join(tmpdir(), "hearth-review-unborn-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await git(root, ["init"]);
-  await git(root, ["config", "user.email", "devspace@example.com"]);
-  await git(root, ["config", "user.name", "DevSpace Test"]);
+  await git(root, ["config", "user.email", "hearth@example.com"]);
+  await git(root, ["config", "user.name", "Hearth Test"]);
   return root;
 }
 
@@ -287,7 +287,7 @@ async function deleteReviewRef(
   workspaceId: string,
   checkpoint: "open" | "baseline",
 ): Promise<void> {
-  await git(root, ["update-ref", "-d", `refs/devspace/review/${workspaceId}/${checkpoint}`]);
+  await git(root, ["update-ref", "-d", `refs/hearth/review/${workspaceId}/${checkpoint}`]);
 }
 
 async function git(cwd: string, args: string[]): Promise<void> {

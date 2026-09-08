@@ -240,7 +240,7 @@ export class LocalAgentStore {
     return storeResult("update", () => this.update(id, patch));
   }
 
-  reconcileActiveRuns(message = "DevSpace restarted while this agent turn was running."): number {
+  reconcileActiveRuns(message = "Hearth restarted while this agent turn was running."): number {
     const now = new Date().toISOString();
     const result = this.database.sqlite
       .prepare(
@@ -253,7 +253,7 @@ export class LocalAgentStore {
   }
 
   reconcileActiveRunsResult(
-    message = "DevSpace restarted while this agent turn was running.",
+    message = "Hearth restarted while this agent turn was running.",
   ): BetterResult<number, AgentStoreError> {
     return storeResult("reconcile_active_runs", () => this.reconcileActiveRuns(message));
   }

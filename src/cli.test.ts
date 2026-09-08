@@ -11,7 +11,7 @@ import { loadConfig } from "./config.js";
 import { localAgentDaemonPaths } from "./local-agent-daemon-lifecycle.js";
 import { encodeLocalAgentDaemonResponse } from "./local-agent-daemon-protocol.js";
 import { LocalAgentStore } from "./local-agent-store.js";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -25,21 +25,21 @@ const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.me
 for (const flag of ["-v", "--version"]) {
   const output = execFileSync("node", ["--import", "tsx", "src/cli.ts", flag], {
     encoding: "utf8",
-    env: { ...process.env, DEVSPACE_CONFIG_DIR: "/tmp/devspace-cli-version-test" },
+    env: { ...process.env, HEARTH_CONFIG_DIR: "/tmp/hearth-cli-version-test" },
   }).trim();
 
   assert.equal(output, packageJson.version);
 }
 
-const root = mkdtempSync(join(tmpdir(), "devspace-cli-agents-test-"));
+const root = mkdtempSync(join(tmpdir(), "hearth-cli-agents-test-"));
 try {
-  const configDir = join(root, ".devspace");
+  const configDir = join(root, ".hearth");
   const stateDir = join(root, ".state");
   const projectRoot = join(root, "project");
   mkdirSync(stateDir, { recursive: true });
   mkdirSync(join(configDir, "agents"), { recursive: true });
   mkdirSync(projectRoot, { recursive: true });
-  const cliConfigEnv = writeTestDevspaceConfig(configDir, {
+  const cliConfigEnv = writeTestHearthConfig(configDir, {
     workspaces: { allowedRoots: [projectRoot] },
     storage: { stateDir },
     subagents: { enabled: true, providers: [] },
@@ -145,8 +145,8 @@ try {
       env: {
         ...process.env,
         ...cliConfigEnv,
-        DEVSPACE_WORKSPACE_ID: "ws_current",
-        DEVSPACE_WORKSPACE_ROOT: projectRoot,
+        HEARTH_WORKSPACE_ID: "ws_current",
+        HEARTH_WORKSPACE_ROOT: projectRoot,
       },
     });
 
@@ -161,8 +161,8 @@ try {
         env: {
           ...process.env,
           ...cliConfigEnv,
-          DEVSPACE_WORKSPACE_ID: "ws_current",
-          DEVSPACE_WORKSPACE_ROOT: projectRoot,
+          HEARTH_WORKSPACE_ID: "ws_current",
+          HEARTH_WORKSPACE_ROOT: projectRoot,
         },
       },
     );
@@ -180,8 +180,8 @@ try {
         env: {
           ...process.env,
           ...cliConfigEnv,
-          DEVSPACE_WORKSPACE_ID: "",
-          DEVSPACE_WORKSPACE_ROOT: stateDir,
+          HEARTH_WORKSPACE_ID: "",
+          HEARTH_WORKSPACE_ROOT: stateDir,
         },
       },
     );
@@ -200,8 +200,8 @@ try {
           env: {
             ...process.env,
             ...cliConfigEnv,
-            DEVSPACE_WORKSPACE_ID: "ws_current",
-            DEVSPACE_WORKSPACE_ROOT: projectRoot,
+            HEARTH_WORKSPACE_ID: "ws_current",
+            HEARTH_WORKSPACE_ROOT: projectRoot,
           },
         },
       );
@@ -237,8 +237,8 @@ try {
           env: {
             ...process.env,
             ...cliConfigEnv,
-            DEVSPACE_WORKSPACE_ID: "ws_current",
-            DEVSPACE_WORKSPACE_ROOT: projectRoot,
+            HEARTH_WORKSPACE_ID: "ws_current",
+            HEARTH_WORKSPACE_ROOT: projectRoot,
           },
         },
       ),

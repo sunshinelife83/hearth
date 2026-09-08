@@ -11,7 +11,7 @@ import {
 
 test("strict modern handler answers the 2026-07-28 discovery probe", async (t) => {
   const handler = createMcpHandler(() => new McpServer(
-    { name: "devspace-modern-test", version: "1.0.0" },
+    { name: "hearth-modern-test", version: "1.0.0" },
     { capabilities: { tools: {} } },
   ), { legacy: "reject" });
   t.after(async () => handler.close());
@@ -28,7 +28,7 @@ test("strict modern handler answers the 2026-07-28 discovery probe", async (t) =
 test("modern registration adapter preserves tools and request metadata", async (t) => {
   const handler = createMcpHandler(() => {
     const adapter = createModernMcpServerAdapter({
-      name: "devspace-modern-test",
+      name: "hearth-modern-test",
       version: "1.0.0",
     });
     registerAppTool(
@@ -72,7 +72,7 @@ test("modern registration adapter preserves tools and request metadata", async (
 test("modern registration adapter preserves progress notifications", async (t) => {
   const handler = createMcpHandler(() => {
     const adapter = createModernMcpServerAdapter({
-      name: "devspace-modern-test",
+      name: "hearth-modern-test",
       version: "1.0.0",
     });
     registerAppTool(
@@ -117,17 +117,17 @@ test("modern registration adapter preserves progress notifications", async (t) =
 test("modern registration adapter preserves resources", async (t) => {
   const handler = createMcpHandler(() => {
     const adapter = createModernMcpServerAdapter({
-      name: "devspace-modern-test",
+      name: "hearth-modern-test",
       version: "1.0.0",
     });
     registerAppResource(
       adapter.registrationTarget,
       "Test resource",
-      "ui://devspace/test.html",
+      "ui://hearth/test.html",
       {},
       async (_uri, { _meta }) => ({
         contents: [{
-          uri: "ui://devspace/test.html",
+          uri: "ui://hearth/test.html",
           mimeType: "text/html",
           text: `resource-ok:${String(_meta?.["openai/session"] ?? "missing")}`,
         }],
@@ -138,7 +138,7 @@ test("modern registration adapter preserves resources", async (t) => {
   t.after(async () => handler.close());
 
   const response = await handler.fetch(modernRequest("resources/read", {
-    uri: "ui://devspace/test.html",
+    uri: "ui://hearth/test.html",
     _meta: { "openai/session": "resource-chat" },
   }));
 
@@ -164,11 +164,11 @@ test("compiled registration surface reuses static tool and resource definitions"
     registerAppResource(
       target,
       "Cached resource",
-      "ui://devspace/cached.html",
+      "ui://hearth/cached.html",
       {},
       async () => ({
         contents: [{
-          uri: "ui://devspace/cached.html",
+          uri: "ui://hearth/cached.html",
           mimeType: "text/html",
           text: "cached-resource",
         }],
@@ -179,7 +179,7 @@ test("compiled registration surface reuses static tool and resource definitions"
 
   const handler = createMcpHandler(() => {
     const adapter = createModernMcpServerAdapter({
-      name: "devspace-modern-test",
+      name: "hearth-modern-test",
       version: "1.0.0",
     });
     bindRegistrationSurface(adapter.registrationTarget);
@@ -194,7 +194,7 @@ test("compiled registration surface reuses static tool and resource definitions"
   assert.equal(registrationBuilds, 1);
 
   const resource = await handler.fetch(modernRequest("resources/read", {
-    uri: "ui://devspace/cached.html",
+    uri: "ui://hearth/cached.html",
   }));
   assert.equal(resource.status, 200, await resource.clone().text());
   assert.match(await resource.text(), /cached-resource/);

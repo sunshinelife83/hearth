@@ -24,7 +24,7 @@ assert.equal(
 );
 
 if (process.platform !== "win32") {
-  const root = await mkdtemp(join(tmpdir(), "devspace-codex-app-server-test-"));
+  const root = await mkdtemp(join(tmpdir(), "hearth-codex-app-server-test-"));
   const badBin = join(root, "bad-bin");
   const goodBin = join(root, "good-bin");
   await mkdir(badBin);

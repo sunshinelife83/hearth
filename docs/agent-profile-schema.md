@@ -1,20 +1,20 @@
 # Subagent profile schema
 
-DevSpace agent profiles are user-owned markdown files with YAML
+Hearth agent profiles are user-owned markdown files with YAML
 frontmatter. They describe roles such as reviewer, explorer, or implementer.
-The internal on-demand `devspace-agentd` process owns provider invocation. The
+The internal on-demand `hearth-agentd` process owns provider invocation. The
 CLI and MCP server use it as clients when they need agent execution.
 
-When subagents are enabled, the internal `devspace-agentd` process owns the
-durable agent manager and live provider runtimes. `devspace agents run` is a
-thin local client that starts or reuses the daemon automatically; `devspace
+When subagents are enabled, the internal `hearth-agentd` process owns the
+durable agent manager and live provider runtimes. `hearth agents run` is a
+thin local client that starts or reuses the daemon automatically; `hearth
 serve` is not required. A run returns an agent id immediately, while the daemon
 persists its status, latest response, and provider session id.
 
 Profiles are discovered from:
 
-- `~/.devspace/agents/*.md`
-- `.devspace/agents/*.md`
+- `~/.hearth/agents/*.md`
+- `.hearth/agents/*.md`
 
 Packaged files under `examples/agents/` are starter templates only.
 
@@ -22,7 +22,7 @@ Packaged files under `examples/agents/` are starter templates only.
 
 ```md
 ---
-schema: devspace-agent/v1
+schema: hearth-agent/v1
 name: reviewer
 description: Read-only reviewer for bugs, security risks, and missing tests.
 provider: codex
@@ -43,7 +43,7 @@ Cite files and return concise findings.
 Optional schema identifier:
 
 ```yaml
-schema: devspace-agent/v1
+schema: hearth-agent/v1
 ```
 
 ### `name`
@@ -51,10 +51,10 @@ schema: devspace-agent/v1
 Stable profile identifier shown to the model and accepted by:
 
 ```bash
-devspace agents run <name> "<prompt>"
+hearth agents run <name> "<prompt>"
 ```
 
-Use lowercase kebab-case names. If omitted, DevSpace uses the filename without
+Use lowercase kebab-case names. If omitted, Hearth uses the filename without
 `.md`.
 
 ### `description`
@@ -76,19 +76,19 @@ provider: copilot
 provider: grok
 ```
 
-Unsupported or custom providers are rejected. DevSpace maps providers to their
+Unsupported or custom providers are rejected. Hearth maps providers to their
 native integration:
 
 - `codex`: the host-installed `codex app-server` command
 - `claude`: Claude Code SDK
 - `opencode`: OpenCode SDK
-- `pi`: the installed Pi coding-agent SDK, one in-process session per DevSpace agent
+- `pi`: the installed Pi coding-agent SDK, one in-process session per Hearth agent
 - `cursor`: ACP
 - `copilot`: ACP
 - `grok`: Grok Build ACP (`grok agent stdio`)
 
 Codex is resolved from the user's environment rather than bundled with
-DevSpace. Run `codex login` normally before using it; set `CODEX_COMMAND` when
+Hearth. Run `codex login` normally before using it; set `CODEX_COMMAND` when
 the executable is not on the normal PATH. OpenCode, Cursor, and Copilot
 runtimes are started and reused by the daemon internally, while Pi is embedded
 through its Node SDK.
@@ -105,8 +105,8 @@ model: sonnet
 ### `effort`
 
 Optional provider reasoning effort, thinking level, or model variant. If omitted,
-DevSpace lets the provider default apply. Values are provider-specific
-passthrough strings; DevSpace does not translate names between harnesses.
+Hearth lets the provider default apply. Values are provider-specific
+passthrough strings; Hearth does not translate names between harnesses.
 
 ```yaml
 effort: low
@@ -114,7 +114,7 @@ effort: high
 effort: xhigh
 ```
 
-DevSpace passes this through to providers that expose a matching control:
+Hearth passes this through to providers that expose a matching control:
 
 - `claude`: SDK effort with adaptive thinking.
 - `codex`: app-server model reasoning effort.
@@ -133,7 +133,7 @@ disabled: true
 
 ## Markdown body
 
-The body is the profile prompt prefix DevSpace prepends when launching that
+The body is the profile prompt prefix Hearth prepends when launching that
 profile. It is not included in `open_workspace` by default.
 
 Recommended body content:
@@ -148,11 +148,11 @@ Recommended body content:
 The Subagent skill teaches only:
 
 ```bash
-devspace agents ls --json
-devspace agents targets --json
-devspace agents run <profile-or-provider> "<prompt>" --json
-devspace agents continue <id> "<prompt>" --json
-devspace agents show <id> --json
+hearth agents ls --json
+hearth agents targets --json
+hearth agents run <profile-or-provider> "<prompt>" --json
+hearth agents continue <id> "<prompt>" --json
+hearth agents show <id> --json
 ```
 
 `open_workspace` exposes compact profile metadata:
@@ -167,24 +167,24 @@ devspace agents show <id> --json
 }
 ```
 
-`devspace agents targets` lists usable providers and profile definitions for the
-current workspace. `devspace agents ls` lists existing subagent sessions; it does
+`hearth agents targets` lists usable providers and profile definitions for the
+current workspace. `hearth agents ls` lists existing subagent sessions; it does
 not list profile definitions.
 
-Use `devspace agents continue <id>` for a later turn. The logical agent ID is
+Use `hearth agents continue <id>` for a later turn. The logical agent ID is
 the `agt_...` value returned by `run` or `ls`; provider session IDs are not
 accepted as substitutes.
 
-The full profile body stays out of the model context until DevSpace launches the
+The full profile body stays out of the model context until Hearth launches the
 profile.
 
 ## Runtime lifecycle
 
-DevSpace keeps provider sessions warm while they are active or recently used,
+Hearth keeps provider sessions warm while they are active or recently used,
 but persists only the provider session id and durable agent metadata. Native
 sharing follows the provider boundary: Codex uses one app-server across agents,
 OpenCode uses one server across sessions, ACP providers use one process across
-sessions, while Claude and Pi keep one warm runtime per DevSpace agent. There is
+sessions, while Claude and Pi keep one warm runtime per Hearth agent. There is
 one active turn per agent; different agents may run concurrently.
 
 If the daemon restarts during a turn, persisted `starting` and `running` agents
@@ -199,5 +199,5 @@ server can restart independently because it does not own this state.
 - Exposing raw provider transcripts by default.
 - Teaching the model provider-specific CLIs.
 - First-class MCP agent tools. Future tools should call the same local agent
-  daemon used by `devspace agents` rather than executing providers in the MCP
+  daemon used by `hearth agents` rather than executing providers in the MCP
   server process.

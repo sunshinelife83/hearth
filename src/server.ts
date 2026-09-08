@@ -22,10 +22,14 @@ import {
   registerArtifactTools,
 } from "./artifact-tools.js";
 import { registerAgentTools } from "./agent-tools.js";
+import { registerDashboard, dashboardDirectory } from "./dashboard.js";
+import { loadMachineIdentity } from "./machine-id.js";
+import { expandHomePath } from "./roots.js";
 import { registerTaskTools } from "./task-tools.js";
 import { registerContextTools } from "./context/context-tools.js";
 import { TaskStore } from "./task-store.js";
 import { probeSandboxAdapter, wrapCommandWithSandbox } from "./policy/sandbox.js";
+import { resolveExecutionForWorkspace } from "./policy/workspace-profiles.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import {
   createOpenAIIncomingArtifactAdapter,
@@ -89,8 +93,8 @@ const SHUTDOWN_DRAIN_TIMEOUT_MS = 15_000;
 
 function mcpServerInfo() {
   return {
-    name: "devspace",
-    title: "DevSpace",
+    name: "hearth",
+    title: "Hearth",
     version: "0.1.0",
     description:
       "Coding tools for project workspaces. Open each project or worktree once, then reuse its workspaceId.",
@@ -154,7 +158,7 @@ function serverInstructions(
 ): string {
   const artifactInstruction =
     config.artifactsEnabled && isArtifactDownloadSupportedPlatform()
-      ? " When the user supplies or generates a file that is not present on the DevSpace host, use download_artifact with its native file value, the existing workspace ID, and a suitable relative destination path chosen from the user's request and project structure. The tool refuses to overwrite an existing destination and returns the normalized workspace-relative path. Use normal workspace tools when explicit inspection, replacement, movement, renaming, or deletion is needed. Do not recreate binary files with write/edit calls or place signed URLs, native file objects, base64 content, or invented host paths in shell commands or logs."
+      ? " When the user supplies or generates a file that is not present on the Hearth host, use download_artifact with its native file value, the existing workspace ID, and a suitable relative destination path chosen from the user's request and project structure. The tool refuses to overwrite an existing destination and returns the normalized workspace-relative path. Use normal workspace tools when explicit inspection, replacement, movement, renaming, or deletion is needed. Do not recreate binary files with write/edit calls or place signed URLs, native file objects, base64 content, or invented host paths in shell commands or logs."
       : "";
   const showChangesInstruction =
     " If the turn successfully modifies files by creating, editing, overwriting, deleting, moving, or applying patches, call show_changes exactly once for that workspace after the final related file change and before your final response so the user can inspect the aggregate diff for that turn. Do not call it after every individual file change.";
@@ -162,7 +166,7 @@ function serverInstructions(
     ? `When ${toolNames.openWorkspace} returns available skills and a task matches a skill, use ${toolNames.read} to read that skill's path before proceeding. Skill paths may be outside the workspace, and ${toolNames.read} permits files within advertised skill directories. `
     : "";
   const agents = `Follow instructions returned by ${toolNames.openWorkspace}. Before working under a path listed in availableAgentsFiles, use ${toolNames.read} to inspect that instruction file and follow it. `;
-  const common = `Use DevSpace for coding work. Call ${toolNames.openWorkspace} once for each project folder or isolated worktree, then keep using its workspaceId. During continued work in the same project or worktree, do not call ${toolNames.openWorkspace} again. Open another workspace only when changing projects, switching checkout/worktree mode, creating another isolated worktree, or when the current workspaceId is rejected.`;
+  const common = `Use Hearth for coding work. Call ${toolNames.openWorkspace} once for each project folder or isolated worktree, then keep using its workspaceId. During continued work in the same project or worktree, do not call ${toolNames.openWorkspace} again. Open another workspace only when changing projects, switching checkout/worktree mode, creating another isolated worktree, or when the current workspaceId is rejected.`;
 
   return `${common} ${toolSurface.instructions({ agents, skills })}${artifactInstruction}${showChangesInstruction}`;
 }
@@ -288,7 +292,7 @@ function workspaceAppHtml(config: ServerConfig): string {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DevSpace Workspace</title>
+    <title>Hearth Workspace</title>
     <script type="module" crossorigin src="${assetUrl(baseUrl, entry.file)}"></script>
 ${stylesheets}
   </head>
@@ -383,10 +387,10 @@ function registerMcpSurface(
 
   registerAppResource(
     registrationTarget,
-    "DevSpace Diff Card",
+    "Hearth Diff Card",
     WORKSPACE_APP_URI,
     {
-      description: "Interactive card for viewing DevSpace file diffs.",
+      description: "Interactive card for viewing Hearth file diffs.",
       _meta: {
         ui: {
           csp: appCsp(config),
@@ -727,8 +731,8 @@ function registerMcpSurface(
     async ({ workspaceId }, { _meta }) => {
       const startedAt = performance.now();
       const workspace = workspaces.getWorkspace(workspaceId);
-      const reviewRef = typeof _meta?.["devspace/reviewRef"] === "string"
-        ? _meta["devspace/reviewRef"]
+      const reviewRef = typeof _meta?.["hearth/reviewRef"] === "string"
+        ? _meta["hearth/reviewRef"]
         : undefined;
       const review = reviewRef
         ? await reviewCheckpoints.reviewByRef({
@@ -771,7 +775,7 @@ function registerMcpSurface(
     },
   );
 
-  registerAgentTools(registrationTarget, { config, workspaces });
+  registerAgentTools(registrationTarget, { config, workspaces, taskStore });
 
   registerContextTools(registrationTarget, { config, workspaces });
 
@@ -987,7 +991,7 @@ export function createServer(
   );
   const bearerAuth = requireBearerAuth({
     verifier: oauthProvider,
-    requiredScopes: [config.oauth.scopes[0] ?? "devspace"],
+    requiredScopes: [config.oauth.scopes[0] ?? "hearth"],
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),
   });
   const workspaceStore = createWorkspaceStore(config.stateDir);
@@ -995,18 +999,37 @@ export function createServer(
   const taskStore = new TaskStore(config.stateDir);
   taskStore.reconcileOnBoot();
   const reviewCheckpoints = createReviewCheckpointManager();
+  const processJournalDir = `${config.stateDir}/process-journal`;
+  void import("./process-journal.js").then(({ reapProcessJournal }) =>
+    reapProcessJournal(processJournalDir, (event, details) =>
+      logEvent(config.logging, "warn", event, details),
+    ).then((report) => {
+      if (report.reaped > 0 || report.errors.length > 0) {
+        logEvent(config.logging, "warn", "orphan_reap_boot", {
+          reaped: report.reaped,
+          skipped: report.skipped,
+          errors: report.errors.slice(0, 5),
+        });
+      }
+    }).catch(() => undefined),
+  ).catch(() => undefined);
   const processSessions = new ProcessSessionManager({
     environment: {
       allowAll: config.execution.envAllowAll,
       extraAllowlist: config.execution.envAllowlist,
     },
-    ...(config.execution.sandbox === "none" ? {} : {
-      commandWrapper: (shell, ctx) => wrapCommandWithSandbox(
-        shell,
-        probeSandboxAdapter(),
-        { workspaceRoot: ctx.workspaceRoot, allowNetwork: config.execution.sandboxNetwork === "allow" },
-      ),
-    }),
+    journalDir: processJournalDir,
+    ...(config.execution.sandbox === "none" && config.workspaceProfiles.every((profile) => profile.sandbox !== "auto")
+      ? {}
+      : {
+          commandWrapper: (shell, ctx) => {
+            const resolved = resolveExecutionForWorkspace(config, ctx.workspaceRoot);
+            return wrapCommandWithSandbox(shell, probeSandboxAdapter(), {
+              workspaceRoot: ctx.workspaceRoot,
+              allowNetwork: (resolved.sandboxNetwork ?? config.execution.sandboxNetwork) === "allow",
+            });
+          },
+        }),
   });
   const toolActivities = new ToolActivityTracker();
   const localAgentProviders = buildLocalAgentProviderStatuses(
@@ -1090,7 +1113,7 @@ export function createServer(
       baseUrl: new URL(config.oauthIssuerUrl),
       resourceServerUrl,
       scopesSupported: config.oauth.scopes,
-      resourceName: "DevSpace",
+      resourceName: "Hearth",
     }),
   );
 
@@ -1110,7 +1133,40 @@ export function createServer(
   );
 
   app.get("/healthz", (_req, res) => {
-    res.json({ ok: true, name: "devspace" });
+    let machineId: string | undefined;
+    try {
+      machineId = loadMachineIdentity(config.stateDir).id;
+    } catch {
+      machineId = undefined;
+    }
+    res.json({
+      ok: true,
+      name: "hearth",
+      ...(machineId ? { machineId } : {}),
+      mcp: new URL("/mcp", config.publicBaseUrl).toString(),
+    });
+  });
+
+  // ACME HTTP-01 challenge passthrough for relay-free TLS: serve only
+  // /.well-known/acme-challenge/* from the configured directory so certbot
+  // webroot mode works while the server runs. Nothing else is exposed here.
+  if (config.tls.acmeDir) {
+    const acmeDir = expandHomePath(config.tls.acmeDir);
+    app.use(
+      "/.well-known/acme-challenge",
+      express.static(acmeDir, { fallthrough: false, maxAge: 0 }),
+    );
+  }
+
+  app.get("/", (_req, res) => {
+    res.sendFile("landing.html", { root: dashboardDirectory() });
+  });
+
+  registerDashboard(app, {
+    config,
+    workspaces,
+    taskStore,
+    resolveLocalAgentProviders,
   });
 
   app.all("/mcp", async (req, res) => {
@@ -1196,7 +1252,7 @@ if (await isMainModule()) {
   const { app, config, close, localAgentProviders } = createServer();
   const httpServer = app.listen(config.port, config.host, () => {
     console.log(
-      `devspace listening on http://${config.host}:${config.port}/mcp`,
+      `hearth listening on http://${config.host}:${config.port}/mcp`,
     );
     console.log(`allowed roots: ${config.allowedRoots.join(", ")}`);
     console.log("auth: oauth owner-token flow required");
@@ -1222,7 +1278,7 @@ if (await isMainModule()) {
   };
   const handleShutdown = () => {
     void shutdown().catch((error) => {
-      console.error("devspace shutdown failed", error);
+      console.error("hearth shutdown failed", error);
       process.exit(1);
     });
   };

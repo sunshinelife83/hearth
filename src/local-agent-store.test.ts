@@ -6,7 +6,7 @@ import Database from "better-sqlite3";
 import { databasePath } from "./db/client.js";
 import { LocalAgentStore } from "./local-agent-store.js";
 
-const root = mkdtempSync(join(tmpdir(), "devspace-local-agent-store-test-"));
+const root = mkdtempSync(join(tmpdir(), "hearth-local-agent-store-test-"));
 const stores: LocalAgentStore[] = [];
 
 try {
@@ -74,7 +74,7 @@ assert.deepEqual(store.list({ workspaceRoot: join(root, "other") }), []);
   mkdirSync(legacyStateDir, { recursive: true });
   const legacy = new Database(databasePath(legacyStateDir));
   legacy.exec(`
-    create table devspace_schema_migrations (
+    create table hearth_schema_migrations (
       version integer primary key,
       name text not null,
       applied_at text not null
@@ -96,7 +96,7 @@ assert.deepEqual(store.list({ workspaceRoot: join(root, "other") }), []);
     );
   `);
   const migration = legacy.prepare(
-    "insert into devspace_schema_migrations (version, name, applied_at) values (?, ?, ?)",
+    "insert into hearth_schema_migrations (version, name, applied_at) values (?, ?, ?)",
   );
   // Leave migration 3 unapplied to exercise an interrupted legacy upgrade:
   // it adds an empty effort column before migration 6 copies thinking values.

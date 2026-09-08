@@ -14,8 +14,8 @@ export function resolveCliWorkspaceContext(
   env: NodeJS.ProcessEnv = process.env,
   cwd = process.cwd(),
 ): CliWorkspaceContext {
-  const workspaceId = env.DEVSPACE_WORKSPACE_ID?.trim() || undefined;
-  const injectedRoot = workspaceId ? env.DEVSPACE_WORKSPACE_ROOT?.trim() : undefined;
+  const workspaceId = env.HEARTH_WORKSPACE_ID?.trim() || undefined;
+  const injectedRoot = workspaceId ? env.HEARTH_WORKSPACE_ROOT?.trim() : undefined;
   const candidate = canonicalizePath(
     injectedRoot ? resolve(injectedRoot) : findGitRoot(cwd) ?? resolve(cwd),
   );

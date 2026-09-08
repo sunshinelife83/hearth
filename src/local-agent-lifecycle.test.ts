@@ -18,7 +18,7 @@ import { LocalAgentRuntimePool } from "./local-agent-runtime-pool.js";
 import { LocalAgentStore } from "./local-agent-store.js";
 import type { SubagentsConfig } from "./local-agent-config.js";
 
-const root = await mkdtemp(join(tmpdir(), "devspace-agent-lifecycle-test-"));
+const root = await mkdtemp(join(tmpdir(), "hearth-agent-lifecycle-test-"));
 const stateDir = join(root, "state");
 const scope = { workspaceId: "ws_life", workspaceRoot: root };
 const profile: LocalAgentProfile = {
@@ -206,6 +206,26 @@ describe("agent lifecycle (pause/resume/stop/cancel/output)", () => {
     assert.equal(paused.isErr(), true);
     const stopped = await manager.pause("agt_missing", foreignScope);
     assert.equal(stopped.isErr(), true);
+  });
+
+  it("times out a hung turn with a retryable AGENT_TIMEOUT", async () => {
+    const agent = unwrap(await manager.start({
+      target: "worker",
+      prompt: "hold for timeout",
+      workspaceId: scope.workspaceId,
+      workspaceRoot: root,
+      timeoutMs: 300,
+    }));
+    await waitFor(() => ["error", "idle", "stopped", "paused"].includes(getRecord(agent.id).status));
+    const record = getRecord(agent.id);
+    assert.equal(record.status, "error");
+    assert.equal(record.errorCode, "AGENT_TIMEOUT");
+    assert.equal(record.errorRetryable, true);
+    assert.match(record.error ?? "", /timeout budget/);
+    // Timed-out agents remain resumable.
+    const resumed = unwrap(await manager.resume(agent.id, "try again briefly", {}, scope));
+    assert.equal(resumed.status, "running");
+    await waitFor(() => getRecord(agent.id).status === "idle");
   });
 });
 

@@ -6,7 +6,7 @@ import { openDatabase, type DatabaseHandle } from "./db/client.js";
  * Long-lived local tokens for MCP clients that cannot run the OAuth
  * authorization-code flow (stdio/LAN clients launched by the user). Tokens
  * are shown once at creation and stored hashed; they carry the same
- * authority as the OAuth "devspace" scope and are revoked by name.
+ * authority as the OAuth "hearth" scope and are revoked by name.
  */
 
 export interface DeviceTokenRecord {

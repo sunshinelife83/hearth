@@ -14,13 +14,13 @@ describe("device tokens", () => {
   let store: DeviceTokenStore;
 
   before(async () => {
-    root = await mkdtemp(join(tmpdir(), "devspace-device-token-test-"));
+    root = await mkdtemp(join(tmpdir(), "hearth-device-token-test-"));
     stateDir = join(root, "state");
     provider = new SingleUserOAuthProvider({
       ownerToken: "test-owner-token-that-is-long-enough",
       accessTokenTtlSeconds: 3600,
       refreshTokenTtlSeconds: 2592000,
-      scopes: ["devspace"],
+      scopes: ["hearth"],
       allowedRedirectHosts: ["chatgpt.com"],
       trustProxy: false,
     }, new URL("https://tunnel.example.com/mcp"), stateDir);
@@ -38,7 +38,7 @@ describe("device tokens", () => {
 
     const auth = await provider.verifyAccessToken(token);
     assert.equal(auth.clientId, "device:laptop");
-    assert.deepEqual(auth.scopes, ["devspace"]);
+    assert.deepEqual(auth.scopes, ["hearth"]);
     assert.equal(auth.resource?.href, "https://tunnel.example.com/mcp");
 
     const again = await provider.verifyAccessToken(token);

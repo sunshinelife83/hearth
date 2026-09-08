@@ -9,18 +9,18 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { createReviewCheckpointManager } from "./review-checkpoints.js";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
 const repoRoot = dirname(packageJsonPath);
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
-  bin: { devspace: string };
+  bin: { hearth: string };
 };
-// This verifies the compiled entrypoint declared for the installed `devspace`
+// This verifies the compiled entrypoint declared for the installed `hearth`
 // command. npm's package-install shim itself is outside this focused test.
-const cliPath = join(repoRoot, packageJson.bin.devspace);
+const cliPath = join(repoRoot, packageJson.bin.hearth);
 const tscPath = require.resolve("typescript/bin/tsc");
 
 test("show-changes prints a Git-backed historical review", async (t) => {
@@ -28,12 +28,12 @@ test("show-changes prints a Git-backed historical review", async (t) => {
     cwd: repoRoot,
   });
 
-  const root = await mkdtemp(join(tmpdir(), "devspace-cli-show-changes-"));
+  const root = await mkdtemp(join(tmpdir(), "hearth-cli-show-changes-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const project = join(root, "project");
   await execFileAsync("git", ["init", project]);
-  await git(project, ["config", "user.email", "devspace@example.com"]);
-  await git(project, ["config", "user.name", "DevSpace Test"]);
+  await git(project, ["config", "user.email", "hearth@example.com"]);
+  await git(project, ["config", "user.name", "Hearth Test"]);
   await writeFile(join(project, "README.md"), "hello\n");
   await git(project, ["add", "README.md"]);
   await git(project, ["commit", "-m", "Initial commit"]);
@@ -43,8 +43,8 @@ test("show-changes prints a Git-backed historical review", async (t) => {
   await writeFile(join(project, "README.md"), "hello\nreview me\n");
   const review = await manager.reviewChanges({ workspaceId: "ws_cli", root: project });
 
-  const configDir = join(root, ".devspace");
-  const env = writeTestDevspaceConfig(configDir, {
+  const configDir = join(root, ".hearth");
+  const env = writeTestHearthConfig(configDir, {
     workspaces: { allowedRoots: [project] },
     storage: { stateDir: join(root, ".state") },
   });
@@ -54,8 +54,8 @@ test("show-changes prints a Git-backed historical review", async (t) => {
     env: {
       ...process.env,
       ...env,
-      DEVSPACE_WORKSPACE_ID: "",
-      DEVSPACE_WORKSPACE_ROOT: "",
+      HEARTH_WORKSPACE_ID: "",
+      HEARTH_WORKSPACE_ROOT: "",
     },
     encoding: "utf8",
   });
@@ -66,8 +66,8 @@ test("show-changes prints a Git-backed historical review", async (t) => {
     env: {
       ...process.env,
       ...env,
-      DEVSPACE_WORKSPACE_ID: "",
-      DEVSPACE_WORKSPACE_ROOT: "",
+      HEARTH_WORKSPACE_ID: "",
+      HEARTH_WORKSPACE_ROOT: "",
     },
     encoding: "utf8",
   });
@@ -88,15 +88,15 @@ test("show-changes prints a Git-backed historical review", async (t) => {
       env: {
         ...process.env,
         ...env,
-        DEVSPACE_WORKSPACE_ID: "",
-        DEVSPACE_WORKSPACE_ROOT: "",
+        HEARTH_WORKSPACE_ID: "",
+        HEARTH_WORKSPACE_ROOT: "",
       },
       encoding: "utf8",
     }),
     (error: unknown) => {
       assert.match(
         (error as { stderr?: string }).stderr ?? "",
-        /Unknown DevSpace review reference/,
+        /Unknown Hearth review reference/,
       );
       return true;
     },

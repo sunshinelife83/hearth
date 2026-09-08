@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { enforceShellPolicy, snapshotBeforeRiskyExecution } from "../tool-surfaces/shared.js";
 import type { ServerConfig } from "../config.js";
-import { defaultDevspaceConfig } from "../config-schema.js";
+import { defaultHearthConfig } from "../config-schema.js";
 
 function fakeConfig(mode: "readonly" | "supervised" | "autonomous"): ServerConfig {
-  const parsed = defaultDevspaceConfig();
+  const parsed = defaultHearthConfig();
   return {
     ...(parsed as unknown as ServerConfig),
     execution: {

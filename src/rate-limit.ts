@@ -19,7 +19,7 @@ interface Bucket {
 
 /**
  * Small in-memory sliding-window limiter. State is per-process by design:
- * DevSpace runs as a single local server process, so this needs no shared
+ * Hearth runs as a single local server process, so this needs no shared
  * store. Keys that go idle are evicted lazily to keep the map bounded.
  */
 export class RateLimiter {

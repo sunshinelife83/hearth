@@ -8,9 +8,9 @@ import {
   AgentProviderUnavailableError,
   captureAgentProviderResult,
 } from "./local-agent-errors.js";
-import { removeDevspaceNodeModulesBinFromPath } from "./local-agent-path.js";
+import { removeHearthNodeModulesBinFromPath } from "./local-agent-path.js";
 import { terminateProcessTree } from "./process-platform.js";
-import { devspaceVersion } from "./app-version.js";
+import { hearthVersion } from "./app-version.js";
 import type {
   LocalAgentDriver,
   LocalAgentRunCallbacks,
@@ -32,7 +32,7 @@ export function codexCommandEnvironment(env: NodeJS.ProcessEnv = process.env): N
   const next = { ...env };
   delete next.CODEX_INTERNAL_ORIGINATOR_OVERRIDE;
   if (env.CODEX_COMMAND) return next;
-  if (next.PATH) next.PATH = removeDevspaceNodeModulesBinFromPath(next.PATH);
+  if (next.PATH) next.PATH = removeHearthNodeModulesBinFromPath(next.PATH);
   return next;
 }
 
@@ -110,7 +110,7 @@ export class CodexAppServerRuntime implements LocalAgentRuntime {
 
   async initialize(): Promise<void> {
     await this.rpc.request("initialize", {
-      clientInfo: { name: "devspace", title: "DevSpace", version: devspaceVersion() },
+      clientInfo: { name: "hearth", title: "Hearth", version: hearthVersion() },
       capabilities: {},
     });
     this.rpc.notify("initialized");

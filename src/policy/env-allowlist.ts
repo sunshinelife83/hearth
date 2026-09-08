@@ -6,7 +6,7 @@ import { logEvent, type LoggingConfig } from "../logger.js";
  * Model-run commands must not inherit arbitrary user-environment variables:
  * the environment commonly holds cloud/API credentials, and any command the
  * model executes could read and exfiltrate them. Commands are instead given a
- * conservative allowlist plus the DevSpace workspace markers they legitimately
+ * conservative allowlist plus the Hearth workspace markers they legitimately
  * need. Individual values can still be provided inline per command
  * (`API_KEY=x cmd`) when the user chooses to.
  */
@@ -25,7 +25,7 @@ export const DEFAULT_ENV_ALLOWLIST: readonly string[] = [
   "TMPDIR",
   "TEMP",
   "TMP",
-  // Terminal/display conventions (DevSpace also sets some of these explicitly)
+  // Terminal/display conventions (Hearth also sets some of these explicitly)
   "TERM",
   "COLORTERM",
   // XDG conventions used by many CLIs for config/cache locations
@@ -80,12 +80,12 @@ export function filterChildEnvironment(
 
   const allowlist = new Set<string>([...DEFAULT_ENV_ALLOWLIST, ...(filter.extraAllowlist ?? [])]);
   if (context?.workspaceId) {
-    // DevSpace's own non-secret workspace markers are always passed so CLI
+    // Hearth's own non-secret workspace markers are always passed so CLI
     // helpers invoked from tool shells can scope themselves.
-    allowlist.add("DEVSPACE_WORKSPACE_ID");
-    allowlist.add("DEVSPACE_WORKSPACE_ROOT");
+    allowlist.add("HEARTH_WORKSPACE_ID");
+    allowlist.add("HEARTH_WORKSPACE_ROOT");
   }
-  allowlist.add("DEVSPACE_ORIGIN");
+  allowlist.add("HEARTH_ORIGIN");
 
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(source)) {

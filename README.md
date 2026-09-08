@@ -1,24 +1,24 @@
 <p align="center">
   <picture>
-    <img src="https://raw.githubusercontent.com/Waishnav/devspace/main/docs/assets/devspace-logo-light.png" alt="DevSpace logo" width="140">
+    <img src="https://raw.githubusercontent.com/Waishnav/hearth/main/docs/assets/hearth-logo-light.png" alt="Hearth logo" width="140">
   </picture>
 </p>
 
-<h1 align="center">DevSpace</h1>
+<h1 align="center">Hearth</h1>
 
 <p align="center">Bring a Codex-style coding workflow to ChatGPT.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@waishnav/devspace"><img alt="npm" src="https://img.shields.io/npm/v/%40waishnav%2Fdevspace?style=flat-square" /></a>
-  <a href="https://github.com/Waishnav/devspace/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Waishnav/devspace/ci.yml?style=flat-square&branch=main" /></a>
-  <a href="https://github.com/Waishnav/devspace/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/npm/l/%40waishnav%2Fdevspace?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@waishnav/hearth"><img alt="npm" src="https://img.shields.io/npm/v/%40waishnav%2Fhearth?style=flat-square" /></a>
+  <a href="https://github.com/Waishnav/hearth/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Waishnav/hearth/ci.yml?style=flat-square&branch=main" /></a>
+  <a href="https://github.com/Waishnav/hearth/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/npm/l/%40waishnav%2Fhearth?style=flat-square" /></a>
 </p>
 
-[![DevSpace connected to ChatGPT](https://raw.githubusercontent.com/Waishnav/devspace/main/docs/assets/devspace-screenshot.png)](https://raw.githubusercontent.com/Waishnav/devspace/main/docs/assets/devspace-screenshot.png)
+[![Hearth connected to ChatGPT](https://raw.githubusercontent.com/Waishnav/hearth/main/docs/assets/hearth-screenshot.png)](https://raw.githubusercontent.com/Waishnav/hearth/main/docs/assets/hearth-screenshot.png)
 
 **Give ChatGPT a secure connection to your own machine and Turn ChatGPT into Codex**
 
-DevSpace is a self-hosted MCP server that lets ChatGPT read, edit, search, and run code in your real local projects — your files, your tools, your terminal — without uploading anything to a third party. You run it on your machine, expose it through a tunnel you control, and approve the connection with a password only you have.
+Hearth is a self-hosted MCP server that lets ChatGPT read, edit, search, and run code in your real local projects — your files, your tools, your terminal — without uploading anything to a third party. You run it on your machine, expose it through a tunnel you control, and approve the connection with a password only you have.
 
 The same `/mcp` endpoint serves the 2026-07-28 per-request protocol and automatically supports older 2025-era clients through stateless compatibility handling. There is no protocol mode to configure.
 
@@ -54,40 +54,57 @@ The same `/mcp` endpoint serves the 2026-07-28 per-request protocol and automati
 </table>
 -->
 <p>
-  DevSpace is open to new sponsors.
+  Hearth is open to new sponsors.
   <a href="https://x.com/wshxnv">Get in touch to become one.</a>
 </p>
 
 ## Installation
 
-DevSpace requires Node `>=22.19 <27`.
+Hearth requires Node `>=22.19 <27`.
 
-Install the DevSpace CLI:
+Install the Hearth CLI (works like `opencode` once installed):
 
 ```bash
-npm install -g @waishnav/devspace
+npm install -g @waishnav/hearth
 ```
 
-Then initialize DevSpace:
+If the registry publish is not live yet, install from a source checkout instead:
+`./install.sh`, or `npm pack` plus
+`HEARTH_PKG=./waishnav-hearth-*.tgz ./install.sh`.
+
+Then initialize Hearth:
 
 ```bash
-devspace init
+hearth init
+```
+
+Non-interactive (scripts, second machine):
+
+```bash
+hearth init --yes --use both --roots ~/personal,~/work --public-url https://your-tunnel-host.example.com
+```
+
+Or one line from a checkout (checks Node, packs, installs, then runs setup
+when interactive):
+
+```bash
+./install.sh
 ```
 
 Or run it without a global install:
 
 ```bash
-npx @waishnav/devspace init
+npx @waishnav/hearth init
 ```
 
-During setup, DevSpace asks for:
+During setup, Hearth asks for:
 
 - where you will use it: ChatGPT, Coding Agents, or both
-- which Coding Agents DevSpace may use
+- which Coding Agents Hearth may use
 
 If you select ChatGPT, setup also asks which local project folders it may open
-and for your public HTTPS base URL from Cloudflare Tunnel, ngrok, Pinggy,
-Tailscale Funnel, or another reverse proxy. A Coding Agents-only setup asks
+and for your public HTTPS base URL from a tunnel or reverse proxy you control.
+A Coding Agents-only setup asks
 neither question: local commands use the current Git project, or the current
 directory outside a repository.
 
@@ -98,24 +115,28 @@ https://your-tunnel-host.example.com
 ```
 
 You will configure your MCP client with the public `/mcp` URL after setup.
-Run `devspace serve` when using ChatGPT. For Coding Agents, setup prints a
+Run `hearth serve` when using ChatGPT. For Coding Agents, setup prints a
 `skills` command and lets the Skills CLI handle installation.
 
-When the client connects, DevSpace opens an Owner password approval page. Enter
-the Owner password printed by `devspace init`. It is also stored in:
+When the client connects, Hearth opens an Owner password approval page. Enter
+the Owner password printed by `hearth init`. It is also stored in:
 
 ```text
-~/.devspace/auth.json
+~/.hearth/auth.json
 ```
 
 Keep that password private.
 
 ## Connect Your MCP Client
 
+Run `hearth connect` for this PC's exact steps (also in the dashboard Connect
+tab). Each PC has a stable `hearth-xxxx` id (`hearth id`); do not reuse one
+public URL on two PCs.
+
 The default local endpoint is:
 
 ```text
-http://127.0.0.1:7676/mcp
+http://127.0.0.1:7176/mcp
 ```
 
 Most users should connect through a public HTTPS tunnel:
@@ -124,11 +145,15 @@ Most users should connect through a public HTTPS tunnel:
 https://your-tunnel-host.example.com/mcp
 ```
 
+ChatGPT, Claude, and generic MCP clients all use the same `/mcp` endpoint.
+Claude needs `claude.ai` in `oauth.allowedRedirectHosts` (default since v1.1).
+Local-only clients can use `hearth mcp` stdio with `hearth token create <name>`.
+
 > [!NOTE]
-> Using DevSpace as an MCP connector isn't against OpenAI's Usage Policies — it's
+> Using Hearth as an MCP connector isn't against OpenAI's Usage Policies — it's
 > a standard custom App/connector setup, and writing or running code isn't a
 > restricted use case. But your account is governed by your usage, not by
-> DevSpace. Don't point it at anything that would violate your provider's terms.
+> Hearth. Don't point it at anything that would violate your provider's terms.
 > Used normally, you're fine. (Based on OpenAI's Usage Policies and Service Terms
 > as of June 2026.)
 
@@ -138,7 +163,7 @@ Once connected, ChatGPT can open one of your approved project folders as a
 workspace. From there, it can inspect the repo, make scoped edits, run commands,
 and show you what changed.
 
-DevSpace gives ChatGPT tools to:
+Hearth gives ChatGPT tools to:
 
 - read, write, and edit files inside the opened workspace
 - search code and inspect directories
@@ -148,9 +173,45 @@ DevSpace gives ChatGPT tools to:
 - discover local agent skills from your skill folders
 - show tool cards and optional change summaries in ChatGPT Apps-compatible hosts
 
+## Local Dashboard
+
+`hearth serve` also serves a local ops console at:
+```text
+http://127.0.0.1:7176/dashboard
+```
+
+Sign in with the Owner password. The dashboard covers installation status,
+workspaces, background agents, tasks with verification state, recent logs,
+snapshots, and safe config edits (execution mode, sandbox settings, fleet
+lanes, workspace profiles). Config edits take effect after restarting the
+server.
+
+The dashboard performs no privileged execution of its own: it shows the same
+policy-gated state the MCP surface sees, and agents/tasks are still driven
+from your MCP client.
+
+## Direct Exposure Without a Relay
+
+No software can give your PC a public URL with zero outside help: ChatGPT must
+reach a public IP over valid HTTPS. What Hearth removes is the *relay
+middleman*. If you have a domain and an inbound route to this machine:
+
+```bash
+hearth expose    # reports this PC's identity and exactly what's missing
+hearth id        # stable per-PC identity (hearth-xxxx...)
+```
+
+Then: point your domain at the machine, forward TCP 443 (and 80 for issuance),
+issue a certificate with certbot webroot against `tls.acmeDir`, set
+`tls.certFile`/`tls.keyFile`, run `hearth config set publicBaseUrl
+https://your-domain`, and restart serve. Hearth terminates TLS itself and
+serves the ACME challenge path. Without an inbound route + domain, traffic
+needs *some* relay — run your own (e.g. on your VPS), never one you don't
+control.
+
 ## Mental Model
 
-DevSpace is remote access to selected local folders.
+Hearth is remote access to selected local folders.
 
 You decide which roots are allowed. The MCP client still has powerful local
 capabilities inside an opened workspace, including shell execution. Treat a
@@ -159,14 +220,14 @@ connected client like a trusted coding partner with access to your machine.
 For a normal ChatGPT coding session:
 
 1. Start your tunnel.
-2. Run `devspace serve`.
+2. Run `hearth serve`.
 3. Connect the MCP client to your public `/mcp` URL.
 4. Approve the connection with the Owner password.
 5. Ask ChatGPT to open a project inside one of your allowed roots.
 
 ## Platform Support
 
-DevSpace supports Linux, macOS, and Windows environments with a Bash-compatible
+Hearth supports Linux, macOS, and Windows environments with a Bash-compatible
 shell.
 
 | Platform                                          | Status            | Notes                                          |
@@ -179,17 +240,17 @@ shell.
 Run this to inspect your local setup:
 
 ```bash
-devspace doctor
+hearth doctor
 ```
 
 ## Documentation
 
-- [Setup Guide](https://github.com/Waishnav/devspace/blob/main/docs/setup.md)
-- [ChatGPT Coding Workflow](https://github.com/Waishnav/devspace/blob/main/docs/chatgpt-coding-workflow.md)
-- [Configuration Reference](https://github.com/Waishnav/devspace/blob/main/docs/configuration.md)
-- [Native File Download](https://github.com/Waishnav/devspace/blob/main/docs/artifact-exchange.md)
-- [Security Model](https://github.com/Waishnav/devspace/blob/main/docs/security.md)
-- [Troubleshooting Gotchas](https://github.com/Waishnav/devspace/blob/main/docs/gotchas.md)
+- [Setup Guide](https://github.com/Waishnav/hearth/blob/main/docs/setup.md)
+- [ChatGPT Coding Workflow](https://github.com/Waishnav/hearth/blob/main/docs/chatgpt-coding-workflow.md)
+- [Configuration Reference](https://github.com/Waishnav/hearth/blob/main/docs/configuration.md)
+- [Native File Download](https://github.com/Waishnav/hearth/blob/main/docs/artifact-exchange.md)
+- [Security Model](https://github.com/Waishnav/hearth/blob/main/docs/security.md)
+- [Troubleshooting Gotchas](https://github.com/Waishnav/hearth/blob/main/docs/gotchas.md)
 
 ## Philosophy
 
@@ -202,7 +263,7 @@ orchestrate sub-agents that set up the right loops for us.
 
 We are not there yet.
 
-DevSpace is one attempt to fast-forward that future: a way for MCP-capable
+Hearth is one attempt to fast-forward that future: a way for MCP-capable
 hosts like ChatGPT and Claude to work directly with local project files through
 explicit, inspectable tools.
 
@@ -246,7 +307,7 @@ This year, I began my journey to build a one-person, multi-agent company capable
 
 ## Local Development
 
-For working on DevSpace itself:
+For working on Hearth itself:
 
 Install pnpm 11.25.0, the version pinned in `package.json`, with
 `npm install --global pnpm@11.25.0`, then:

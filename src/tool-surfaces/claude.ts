@@ -1,7 +1,6 @@
 import * as z from "zod/v4";
 import {
   editFileTool,
-  runShellTool,
   writeFileTool,
 } from "../pi-tools.js";
 import {
@@ -175,7 +174,7 @@ function registerClaudeMutationTools(context: ToolRegistrationContext): void {
 }
 
 function registerShellTool(context: ToolRegistrationContext): void {
-  const { server, config, workspaces } = context;
+  const { server, config, workspaces, processSessions } = context;
 
   server.registerTool(
     toolNames.shell,
@@ -212,7 +211,11 @@ function registerShellTool(context: ToolRegistrationContext): void {
     async ({ workspaceId, workingDirectory, approvedByUser, ...input }) => {
       const startedAt = performance.now();
       const workspace = workspaces.getWorkspace(workspaceId);
-      const verdict = enforceShellPolicy(config, { tool: toolNames.shell, workspaceId, command: input.command }, approvedByUser);
+      const verdict = enforceShellPolicy(
+        config,
+        { tool: toolNames.shell, workspaceId, command: input.command, workspaceRoot: workspace.root },
+        approvedByUser,
+      );
       if (verdict.denial) {
         logFailedToolResponse(
           config,
@@ -228,7 +231,7 @@ function registerShellTool(context: ToolRegistrationContext): void {
         );
         return verdict.denial;
       }
-      const sandbox = sandboxDecision(config, verdict.classification.tier);
+      const sandbox = sandboxDecision(config, verdict.classification.tier, workspace.root);
       if (sandbox.denialReason) {
         logFailedToolResponse(
           config,
@@ -253,26 +256,42 @@ function registerShellTool(context: ToolRegistrationContext): void {
         workingDirectory,
       );
       await snapshotBeforeRiskyExecution(config, workspace, input.command);
-      const response = await runShellTool(input, {
-        cwd,
-        root: workspace.root,
-      });
 
-      if (response.isError) {
-        logFailedToolResponse(
-          config,
-          {
-            tool: toolNames.shell,
-            workspaceId,
-            workingDirectory: workingDirectory ?? ".",
-            command: input.command,
-            commandLength: input.command.length,
-          },
-          response.content,
-          startedAt,
-        );
-        return response;
+      // Security boundary: bash executes through the same process manager as
+      // every other shell tool — policy gate above, environment allowlist,
+      // OS-sandbox wrapper, and process journal all apply. The former Pi
+      // spawn path (which bypassed the sandbox wrapper) is gone.
+      const timeoutSeconds = Math.min(input.timeout ?? 30, 300);
+      let snapshot = await processSessions.start({
+        workspaceId,
+        command: input.command,
+        cwd,
+        workspaceRoot: workspace.root,
+        sandbox: sandbox.enabled,
+        yieldTimeMs: timeoutSeconds * 1000,
+        maxOutputTokens: 10_000,
+      });
+      let timedOut = false;
+      if (snapshot.running) {
+        timedOut = true;
+        processSessions.terminate(workspaceId, snapshot.sessionId!);
+        snapshot = await processSessions.write({
+          workspaceId,
+          sessionId: snapshot.sessionId!,
+          chars: "",
+          yieldTimeMs: 5_000,
+          maxOutputTokens: 10_000,
+        });
       }
+
+      const statusLine = timedOut
+        ? `Command timed out after ${timeoutSeconds}s and was terminated.`
+        : snapshot.signal
+          ? `Process exited after signal ${snapshot.signal}.`
+          : `Process exited with code ${snapshot.exitCode ?? "unknown"}.`;
+      const result = snapshot.output
+        ? `${snapshot.output.replace(/\n$/, "")}\n${statusLine}`
+        : statusLine;
 
       logToolCall(config, {
         tool: toolNames.shell,
@@ -280,15 +299,13 @@ function registerShellTool(context: ToolRegistrationContext): void {
         workingDirectory: workingDirectory ?? ".",
         command: input.command,
         commandLength: input.command.length,
-        success: true,
+        success: !timedOut && snapshot.exitCode === 0,
         durationMs: Math.round(performance.now() - startedAt),
       });
 
       return {
-        ...response,
-        structuredContent: {
-          result: contentText(response.content),
-        },
+        content: [textBlock(result)],
+        structuredContent: { result },
       };
     },
   );

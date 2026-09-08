@@ -15,6 +15,51 @@ export interface LoggingConfig {
 
 type LogFields = Record<string, unknown>;
 
+/**
+ * Bounded in-memory ring of recent log events for the local dashboard.
+ * Secret-safe by construction: only the event name, timestamp, level, and a
+ * small set of scalar operational fields are retained. Free-form content,
+ * command text, file contents, tokens, and credentials never enter the ring.
+ */
+export interface RecentLogEntry {
+  ts: string;
+  level: string;
+  event: string;
+  tool?: string;
+  workspaceId?: string;
+  status?: string;
+  durationMs?: number;
+  method?: string;
+  path?: string;
+}
+
+const RECENT_LOG_CAP = 200;
+const recentLog: RecentLogEntry[] = [];
+
+const RECENT_SCALAR_KEYS = new Set(["tool", "workspaceId", "status", "method", "path"]);
+const SENSITIVE_KEY_RE = /token|secret|password|credential|apikey|api_key|auth|cookie|session/i;
+
+function toRecentEntry(entry: LogFields & { ts: string; level: string; event: string }): RecentLogEntry | undefined {
+  if (typeof entry.event !== "string") return undefined;
+  const out: RecentLogEntry = { ts: entry.ts, level: entry.level, event: entry.event };
+  for (const key of RECENT_SCALAR_KEYS) {
+    if (SENSITIVE_KEY_RE.test(key)) continue;
+    const value = entry[key];
+    if (typeof value === "string" && !SENSITIVE_KEY_RE.test(value)) {
+      (out as unknown as Record<string, unknown>)[key] = value.slice(0, 200);
+    }
+  }
+  if (typeof entry.durationMs === "number" && Number.isFinite(entry.durationMs)) {
+    out.durationMs = Math.round(entry.durationMs);
+  }
+  return out;
+}
+
+export function recentLogEntries(limit = 100): RecentLogEntry[] {
+  const capped = Math.min(Math.max(1, Math.floor(limit)), RECENT_LOG_CAP);
+  return recentLog.slice(-capped);
+}
+
 const LEVEL_WEIGHT: Record<LogLevel, number> = {
   silent: 0,
   error: 1,
@@ -41,6 +86,12 @@ export function logEvent(
     event,
     ...fields,
   };
+
+  const recent = toRecentEntry(entry as LogFields & { ts: string; level: string; event: string });
+  if (recent) {
+    recentLog.push(recent);
+    if (recentLog.length > RECENT_LOG_CAP) recentLog.splice(0, recentLog.length - RECENT_LOG_CAP);
+  }
 
   const line = config.format === "pretty" ? formatPretty(entry) : JSON.stringify(entry);
   if (level === "error") {

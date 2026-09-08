@@ -56,7 +56,7 @@ export interface ReviewCheckpointManager {
   }): Promise<ReviewChangesResult>;
 }
 
-const REVIEW_REF_PREFIX = "refs/devspace/review";
+const REVIEW_REF_PREFIX = "refs/hearth/review";
 
 export function createReviewCheckpointManager(): ReviewCheckpointManager {
   const states = new Map<string, WorkspaceReviewState>();
@@ -189,7 +189,7 @@ export async function readReviewRef(root: string, reviewRef: string): Promise<Re
 
   const commit = await resolveReviewCommit(eligibility.gitRoot, reviewRef);
   if (!await isKnownReviewCommit(eligibility.gitRoot, commit)) {
-    throw new Error(`Unknown DevSpace review reference: ${reviewRef}`);
+    throw new Error(`Unknown Hearth review reference: ${reviewRef}`);
   }
   return readReviewCommit(eligibility.gitRoot, commit);
 }
@@ -281,7 +281,7 @@ function reviewRefs(
 }
 
 async function createWorkingTreeSnapshot(gitRoot: string, parent: string): Promise<string> {
-  const tempDir = await mkdtemp(join(tmpdir(), "devspace-review-index-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "hearth-review-index-"));
   const indexPath = join(tempDir, "index");
   const env = checkpointEnv(indexPath);
 
@@ -289,7 +289,7 @@ async function createWorkingTreeSnapshot(gitRoot: string, parent: string): Promi
     await git(gitRoot, ["read-tree", "HEAD"], { env });
     await git(gitRoot, ["add", "-A", "--", "."], { env });
     const tree = (await git(gitRoot, ["write-tree"], { env })).stdout.trim();
-    return (await git(gitRoot, ["commit-tree", tree, "-p", parent, "-m", "DevSpace review snapshot"], { env })).stdout.trim();
+    return (await git(gitRoot, ["commit-tree", tree, "-p", parent, "-m", "Hearth review snapshot"], { env })).stdout.trim();
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -364,7 +364,7 @@ async function isKnownReviewCommit(gitRoot: string, reviewCommit: string): Promi
     const [ref, commit] = line.split("\t");
     if (!ref || !commit) continue;
 
-    const match = ref.match(/^refs\/devspace\/review\/(.+)\/(open|baseline)$/);
+    const match = ref.match(/^refs\/hearth\/review\/(.+)\/(open|baseline)$/);
     if (!match) continue;
     const [, workspace, kind] = match;
     if (!workspace || !kind) continue;
@@ -398,10 +398,10 @@ function formatChangedFiles(summary: ReviewSummary): string {
 function checkpointEnv(indexPath: string): NodeJS.ProcessEnv {
   return {
     GIT_INDEX_FILE: indexPath,
-    GIT_AUTHOR_NAME: "DevSpace",
-    GIT_AUTHOR_EMAIL: "devspace@users.noreply.local",
-    GIT_COMMITTER_NAME: "DevSpace",
-    GIT_COMMITTER_EMAIL: "devspace@users.noreply.local",
+    GIT_AUTHOR_NAME: "Hearth",
+    GIT_AUTHOR_EMAIL: "hearth@users.noreply.local",
+    GIT_COMMITTER_NAME: "Hearth",
+    GIT_COMMITTER_EMAIL: "hearth@users.noreply.local",
   };
 }
 

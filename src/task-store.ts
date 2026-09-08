@@ -210,6 +210,28 @@ export class TaskStore {
     return this.get(id)!;
   }
 
+  /**
+   * Resume a failed task (e.g. after crash reconcile or repair-budget
+   * exhaustion) back to planning with an audit trail. Only failed tasks can
+   * resume; completed/cancelled are terminal and in-flight tasks use the
+   * normal transitions.
+   */
+  replan(id: string, reason = "Resumed by client."): TaskRecord {
+    const current = this.get(id);
+    if (!current) throw new Error(`Unknown task: ${id}`);
+    if (current.status !== "failed") {
+      throw new TaskTransitionError(current.status, "planning");
+    }
+    const evidence = [
+      ...current.evidence,
+      { ts: new Date().toISOString(), kind: "note" as const, summary: `resume: failed → planning (${reason})` },
+    ];
+    this.database.sqlite
+      .prepare("update tasks set status = 'planning', error = ?, evidence = ?, updated_at = ? where id = ?")
+      .run(null, JSON.stringify(evidence), new Date().toISOString(), id);
+    return this.get(id)!;
+  }
+
   appendEvidence(id: string, entry: TaskEvidenceEntry): TaskRecord {
     const current = this.get(id);
     if (!current) throw new Error(`Unknown task: ${id}`);
@@ -237,7 +259,7 @@ export class TaskStore {
       .prepare(
         `update tasks
          set status = 'failed',
-             error = 'DevSpace restarted while the task was in flight.',
+             error = 'Hearth restarted while the task was in flight.',
              updated_at = ?
          where status in ('executing', 'verifying', 'repairing')`,
       )

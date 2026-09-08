@@ -8,7 +8,7 @@ import {
   resolveAcpModelConfigUpdate,
   resolveAcpEffortConfigUpdate,
 } from "./local-agent-adapters.js";
-import { removeDevspaceNodeModulesBinFromPath } from "./local-agent-path.js";
+import { removeHearthNodeModulesBinFromPath } from "./local-agent-path.js";
 assert.deepEqual(
   resolveAcpModelConfigUpdate({
     sessionId: "session_model_1",
@@ -324,10 +324,10 @@ assert.equal(
 );
 
 {
-  const devspaceBin = `${process.cwd()}/node_modules/.bin`;
+  const hearthBin = `${process.cwd()}/node_modules/.bin`;
   const userBin = "/home/user/.local/bin";
   assert.equal(
-    removeDevspaceNodeModulesBinFromPath([devspaceBin, userBin].join(delimiter)),
+    removeHearthNodeModulesBinFromPath([hearthBin, userBin].join(delimiter)),
     userBin,
   );
 

@@ -26,11 +26,11 @@ export type LocalAgentDaemonMethod =
 export type LocalAgentDaemonRequest =
   | AgentDaemonRequestBase<"hello", Record<string, never>>
   | AgentDaemonRequestBase<"agent.start", StartLocalAgentInput>
-  | AgentDaemonRequestBase<"agent.continue", { id: string; prompt: string; scope: LocalAgentWorkspaceScope; overrides?: RunOverrides }>
+  | AgentDaemonRequestBase<"agent.continue", { id: string; prompt: string; scope: LocalAgentWorkspaceScope; overrides?: RunOverrides; timeoutMs?: number }>
   | AgentDaemonRequestBase<"agent.get", { id: string; scope: LocalAgentWorkspaceScope }>
   | AgentDaemonRequestBase<"agent.list", LocalAgentWorkspaceScope>
   | AgentDaemonRequestBase<"agent.pause", { id: string; scope: LocalAgentWorkspaceScope; force?: boolean }>
-  | AgentDaemonRequestBase<"agent.resume", { id: string; scope: LocalAgentWorkspaceScope; prompt?: string; overrides?: RunOverrides }>
+  | AgentDaemonRequestBase<"agent.resume", { id: string; scope: LocalAgentWorkspaceScope; prompt?: string; overrides?: RunOverrides; timeoutMs?: number }>
   | AgentDaemonRequestBase<"agent.stop", { id: string; scope: LocalAgentWorkspaceScope; force?: boolean }>
   | AgentDaemonRequestBase<"daemon.status", Record<string, never>>
   | AgentDaemonRequestBase<"daemon.stop", Record<string, never>>

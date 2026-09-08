@@ -1,14 +1,14 @@
 # Local agent daemon
 
-Local agent execution is owned by an on-demand `devspace-agentd` process, not
+Local agent execution is owned by an on-demand `hearth-agentd` process, not
 by the MCP server and not by an individual CLI invocation. The daemon is an
 internal implementation detail: the normal workflow remains:
 
 ```text
-devspace agents run/continue/show/ls
+hearth agents run/continue/show/ls
           │
           ▼
-    devspace-agentd
+    hearth-agentd
           │
           ├── LocalAgentManager
           ├── LocalAgentStore
@@ -18,8 +18,8 @@ devspace agents run/continue/show/ls
 
 The CLI starts the daemon automatically when an agent command needs it. The
 MCP server can use the same local client when an MCP operation needs agent
-functionality, but `devspace serve` is not required for local-agent execution.
-The daemon is scoped to one DevSpace `stateDir`, so one SQLite store and one
+functionality, but `hearth serve` is not required for local-agent execution.
+The daemon is scoped to one Hearth `stateDir`, so one SQLite store and one
 runtime owner serve all clients using that configuration.
 
 Communication uses a private Unix domain socket on Linux/macOS or a named pipe
@@ -53,9 +53,9 @@ normal operation. Diagnostic commands are available for startup, process, and
 cleanup problems:
 
 ```bash
-devspace agents daemon status
-devspace agents daemon stop
-devspace agents daemon logs
+hearth agents daemon status
+hearth agents daemon stop
+hearth agents daemon logs
 ```
 
 Agent commands accept `--json` when a machine-readable response is needed.
@@ -78,7 +78,7 @@ the process exits with active records left durable; the next daemon startup
 reconciles stale `starting` and `running` records to `error` without discarding
 their `providerSessionId` or `latestResponse`.
 
-## DevSpace X additions (protocol v4)
+## Hearth additions (protocol v4)
 
 The daemon protocol moved to version 4 with full agent lifecycle methods,
 exposed to MCP clients through the `agent_*` tools:
@@ -94,7 +94,7 @@ exposed to MCP clients through the `agent_*` tools:
 the in-flight turn's incremental assistant output, streamed from providers
 that support it (ACP agents, Codex, Claude). Pi and OpenCode report output
 only when the turn completes (provider limitation, documented in
-docs/adr/devspace-x-implementation-adrs.md, ADR-017).
+docs/adr/hearth-x-implementation-adrs.md, ADR-017).
 
 Cancellation closes the agent's runtime immediately (`agent_cancelled` close
 reason); a turn that completes successfully after a stop/pause request never

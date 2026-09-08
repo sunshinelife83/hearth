@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyPatch, isSamePatchFile, parsePatch, replaceFile } from "./apply-patch.js";
 
-const root = await mkdtemp(join(tmpdir(), "devspace-apply-patch-"));
+const root = await mkdtemp(join(tmpdir(), "hearth-apply-patch-"));
 const replacement = join(root, "replacement.txt");
 const replacementTemporary = join(root, "replacement.tmp");
 await writeFile(replacement, "old\n");
@@ -94,7 +94,7 @@ await assert.rejects(
   /path escapes the workspace/,
 );
 
-const outside = await mkdtemp(join(tmpdir(), "devspace-apply-patch-outside-"));
+const outside = await mkdtemp(join(tmpdir(), "hearth-apply-patch-outside-"));
 await symlink(outside, join(root, "outside-link"), process.platform === "win32" ? "junction" : "dir");
 await assert.rejects(
   applyPatch(
@@ -138,7 +138,7 @@ await assert.rejects(
 await assert.rejects(readFile(join(root, "should-not-exist.txt"), "utf8"), /ENOENT/);
 assert.equal(await readFile(join(root, "moved/alpha.txt"), "utf8"), "ONE\nchanged\nthree\n");
 
-const splitHunkRoot = await mkdtemp(join(tmpdir(), "devspace-apply-patch-split-hunk-"));
+const splitHunkRoot = await mkdtemp(join(tmpdir(), "hearth-apply-patch-split-hunk-"));
 await writeFile(
   join(splitHunkRoot, "long.txt"),
   Array.from({ length: 20 }, (_, index) => String(index + 1)).join("\n") + "\n",
@@ -168,7 +168,7 @@ assert.equal(
   ].join("\n") + "\n",
 );
 
-const trailingSpaceRoot = await mkdtemp(join(tmpdir(), "devspace-apply-patch-trailing-space-"));
+const trailingSpaceRoot = await mkdtemp(join(tmpdir(), "hearth-apply-patch-trailing-space-"));
 await writeFile(join(trailingSpaceRoot, "spaces.txt"), "old\n");
 const trailingSpaceResult = await applyPatch(
   trailingSpaceRoot,
@@ -189,7 +189,7 @@ assert.throws(
   /has no content/,
 );
 
-const overwriteRoot = await mkdtemp(join(tmpdir(), "devspace-apply-patch-overwrite-"));
+const overwriteRoot = await mkdtemp(join(tmpdir(), "hearth-apply-patch-overwrite-"));
 await writeFile(join(overwriteRoot, "duplicate.txt"), "old content\n");
 const overwriteResult = await applyPatch(
   overwriteRoot,
@@ -218,7 +218,7 @@ await applyPatch(
 assert.equal(await readFile(join(overwriteRoot, "destination.txt"), "utf8"), "new\n");
 await assert.rejects(readFile(join(overwriteRoot, "source.txt"), "utf8"), /ENOENT/);
 
-const noNewlineRoot = await mkdtemp(join(tmpdir(), "devspace-apply-patch-newline-"));
+const noNewlineRoot = await mkdtemp(join(tmpdir(), "hearth-apply-patch-newline-"));
 await writeFile(join(noNewlineRoot, "no-newline.txt"), "old");
 await applyPatch(
   noNewlineRoot,
@@ -231,7 +231,7 @@ await applyPatch(
 );
 assert.equal(await readFile(join(noNewlineRoot, "no-newline.txt"), "utf8"), "new\n");
 
-const eofRoot = await mkdtemp(join(tmpdir(), "devspace-apply-patch-eof-"));
+const eofRoot = await mkdtemp(join(tmpdir(), "hearth-apply-patch-eof-"));
 await writeFile(join(eofRoot, "tail.txt"), "first\nsecond\n");
 await applyPatch(
   eofRoot,
@@ -259,7 +259,7 @@ await assert.rejects(
   /could not find hunk context/,
 );
 
-const lenientRoot = await mkdtemp(join(tmpdir(), "devspace-apply-patch-lenient-"));
+const lenientRoot = await mkdtemp(join(tmpdir(), "hearth-apply-patch-lenient-"));
 await writeFile(join(lenientRoot, "file.txt"), "one\n");
 await applyPatch(
   lenientRoot,

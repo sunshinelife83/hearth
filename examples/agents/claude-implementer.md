@@ -1,5 +1,5 @@
 ---
-schema: devspace-agent/v1
+schema: hearth-agent/v1
 name: claude-implementer
 description: Implementation profile for multi-file changes, careful refactors, and failing test repair.
 provider: claude

@@ -50,13 +50,13 @@ assert.equal(foreground.sessionId, undefined);
 
 const environment = await manager.start({
   workspaceId: "workspace-a",
-  workspaceRoot: "/tmp/devspace-workspace-a",
+  workspaceRoot: "/tmp/hearth-workspace-a",
   cwd: process.cwd(),
-  command: `${node} -e "console.log([process.env.NO_COLOR, process.env.TERM, process.env.PAGER, process.env.GIT_PAGER, process.env.GH_PAGER, process.env.CODEX_CI, process.env.DEVSPACE_WORKSPACE_ID, process.env.DEVSPACE_WORKSPACE_ROOT].join(','))"`,
+  command: `${node} -e "console.log([process.env.NO_COLOR, process.env.TERM, process.env.PAGER, process.env.GIT_PAGER, process.env.GH_PAGER, process.env.CODEX_CI, process.env.HEARTH_WORKSPACE_ID, process.env.HEARTH_WORKSPACE_ROOT].join(','))"`,
   yieldTimeMs: 2_000,
 });
 assert.equal(environment.running, false);
-assert.match(environment.output, /1,dumb,cat,cat,cat,1,workspace-a,\/tmp\/devspace-workspace-a/);
+assert.match(environment.output, /1,dumb,cat,cat,cat,1,workspace-a,\/tmp\/hearth-workspace-a/);
 
 const background = await manager.start({
   workspaceId: "workspace-a",
@@ -118,6 +118,11 @@ const defaultInputResult = await manager.write({
   workspaceId: "workspace-a",
   sessionId: defaultInteractive.sessionId,
   chars: "hello\n",
+  // Explicit generous yield: the default interactive poll (250ms) plus the
+  // child's own 100ms timer plus spawn latency exceeds the budget on loaded
+  // machines, leaving the session legitimately still running. Regression test
+  // for the parallel-load flake (asserted running===false too early).
+  yieldTimeMs: 10_000,
 });
 assert.equal(defaultInputResult.running, false);
 assert.match(defaultInputResult.output, /default-input:hello/);

@@ -9,7 +9,7 @@ import { loadConfig, type ServerConfig } from "./config.js";
 import { GitWorktreeError } from "./git-worktrees.js";
 import { SqliteWorkspaceStore } from "./workspace-store.js";
 import { WorkspaceRegistry } from "./workspaces.js";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -55,13 +55,13 @@ test("global instruction symlinks may target user-managed files outside agentDir
   await writeFile(join(dotfilesAgents, "AGENTS.md"), "dotfiles instructions\n");
   await symlink(join(dotfilesAgents, "AGENTS.md"), join(agentDir, "AGENTS.md"));
 
-  const config = loadConfig(writeTestDevspaceConfig(
-    join(context.root, ".devspace-dotfiles-home"),
+  const config = loadConfig(writeTestHearthConfig(
+    join(context.root, ".hearth-dotfiles-home"),
     {
       server: { port: 1 },
       workspaces: {
         allowedRoots: [context.root],
-        worktreeRoot: join(context.root, ".devspace", "dotfiles-worktrees"),
+        worktreeRoot: join(context.root, ".hearth", "dotfiles-worktrees"),
       },
       skills: { agentDir },
     },
@@ -178,13 +178,13 @@ test("workspace cache evicts old contexts without losing advertised skill reads"
   );
   await writeFile(resourceFile, "reference\n");
 
-  const config = loadConfig(writeTestDevspaceConfig(
+  const config = loadConfig(writeTestHearthConfig(
     join(context.root, ".bounded-home"),
     {
       server: { port: 1 },
       workspaces: {
         allowedRoots: [context.root],
-        worktreeRoot: join(context.root, ".devspace", "bounded-worktrees"),
+        worktreeRoot: join(context.root, ".hearth", "bounded-worktrees"),
       },
       skills: { agentDir },
       subagents: { enabled: true, providers: [] },
@@ -230,13 +230,13 @@ test("a symlinked allowed root preserves checkout and worktree path behavior", {
   await symlink(context.root, aliasRoot, "dir");
   await createGitProject(context.root);
 
-  const aliasConfig = loadConfig(writeTestDevspaceConfig(
-    join(context.root, ".devspace-alias-home"),
+  const aliasConfig = loadConfig(writeTestHearthConfig(
+    join(context.root, ".hearth-alias-home"),
     {
       server: { port: 1 },
       workspaces: {
         allowedRoots: [aliasRoot],
-        worktreeRoot: join(aliasRoot, ".devspace", "alias-worktrees"),
+        worktreeRoot: join(aliasRoot, ".hearth", "alias-worktrees"),
       },
       skills: { agentDir: context.agentDir },
     },
@@ -265,8 +265,8 @@ interface WorkspaceFixture {
 }
 
 async function fixture(t: TestContext): Promise<WorkspaceFixture> {
-  const root = await mkdtemp(join(tmpdir(), "devspace-workspace-test-"));
-  const outsideRoot = await mkdtemp(join(tmpdir(), "devspace-workspace-outside-test-"));
+  const root = await mkdtemp(join(tmpdir(), "hearth-workspace-test-"));
+  const outsideRoot = await mkdtemp(join(tmpdir(), "hearth-workspace-outside-test-"));
   const agentDir = join(root, ".pi", "agent");
 
   if (platform() === "win32") {
@@ -279,9 +279,9 @@ async function fixture(t: TestContext): Promise<WorkspaceFixture> {
   }
 
   await writeFile(join(root, "AGENTS.md"), "root instructions\n");
-  await mkdir(join(root, ".devspace", "agents"), { recursive: true });
+  await mkdir(join(root, ".hearth", "agents"), { recursive: true });
   await writeFile(
-    join(root, ".devspace", "agents", "reviewer.md"),
+    join(root, ".hearth", "agents", "reviewer.md"),
     [
       "---",
       "name: reviewer",
@@ -297,11 +297,11 @@ async function fixture(t: TestContext): Promise<WorkspaceFixture> {
   await writeFile(join(root, "nested", "AGENTS.md"), "nested instructions\n");
   await writeFile(join(root, "nested", "file.txt"), "hello\n");
 
-  const config = loadConfig(writeTestDevspaceConfig(join(root, ".devspace-home"), {
+  const config = loadConfig(writeTestHearthConfig(join(root, ".hearth-home"), {
     server: { port: 1 },
     workspaces: {
       allowedRoots: [root],
-      worktreeRoot: join(root, ".devspace", "worktrees"),
+      worktreeRoot: join(root, ".hearth", "worktrees"),
     },
     skills: { agentDir },
     subagents: { enabled: true, providers: [] },
@@ -327,8 +327,8 @@ async function createGitProject(parent: string): Promise<string> {
   await writeFile(join(gitRoot, "AGENTS.md"), "git root instructions\n");
   await writeFile(join(gitRoot, "README.md"), "hello\n");
   await git(gitRoot, ["init"]);
-  await git(gitRoot, ["config", "user.email", "devspace@example.com"]);
-  await git(gitRoot, ["config", "user.name", "DevSpace Test"]);
+  await git(gitRoot, ["config", "user.email", "hearth@example.com"]);
+  await git(gitRoot, ["config", "user.name", "Hearth Test"]);
   await git(gitRoot, ["add", "."]);
   await git(gitRoot, ["commit", "-m", "Initial commit"]);
   return gitRoot;

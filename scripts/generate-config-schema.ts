@@ -1,9 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import {
-  devspaceConfigJsonSchema,
+  hearthConfigJsonSchema,
 } from "../src/config-schema.js";
 
-const outputPath = new URL("../schema/v1/devspace.schema.json", import.meta.url);
+const outputPath = new URL("../schema/v1/hearth.schema.json", import.meta.url);
 
 mkdirSync(new URL(".", outputPath), { recursive: true });
-writeFileSync(outputPath, `${JSON.stringify(devspaceConfigJsonSchema(), null, 2)}\n`);
+writeFileSync(outputPath, `${JSON.stringify(hearthConfigJsonSchema(), null, 2)}\n`);

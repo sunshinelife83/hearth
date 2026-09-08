@@ -11,6 +11,11 @@ import {
 import { createSnapshot } from "../snapshot-manager.js";
 import { probeSandboxAdapter } from "../policy/sandbox.js";
 import {
+  commandListVerdict,
+  resolveExecutionForWorkspace,
+  type ResolvedExecution,
+} from "../policy/workspace-profiles.js";
+import {
   WORKSPACE_APP_URI,
   type DiffStats,
   type ToolContent,
@@ -36,12 +41,41 @@ export interface ShellPolicyVerdict {
  */
 export function enforceShellPolicy(
   config: ServerConfig,
-  fields: { tool: string; workspaceId: string; command: string },
+  fields: { tool: string; workspaceId: string; command: string; workspaceRoot?: string },
   approvedByUser: boolean | undefined,
 ): ShellPolicyVerdict {
+  const resolved = fields.workspaceRoot
+    ? resolveExecutionForWorkspace(config, fields.workspaceRoot)
+    : globalExecution(config);
   const classification = classifyCommand(fields.command);
+
+  // Workspace allow/deny command lists run before the tier engine: an
+  // explicit deny is final; an allow list restricts to matching commands.
+  const listVerdict = commandListVerdict(resolved, fields.command);
+  if (!listVerdict.allowed) {
+    const reason = `Blocked by workspace policy: ${listVerdict.rule}. Ask the workspace owner to adjust this workspace's profile.`;
+    logEvent(config.logging, "warn", "policy_decision", {
+      tool: fields.tool,
+      workspaceId: fields.workspaceId,
+      tier: classification.tier,
+      decision: "deny",
+      mode: resolved.mode,
+      rule: listVerdict.rule,
+      commandPreview: commandPreview(fields.command),
+    });
+    return {
+      classification,
+      decision: { decision: "deny", reason },
+      denial: {
+        content: [{ type: "text", text: reason }],
+        isError: true,
+        structuredContent: { result: reason },
+      },
+    };
+  }
+
   const decision = decideExecution({
-    mode: config.execution.mode,
+    mode: resolved.mode,
     tier: classification.tier,
     approvedByUser,
   });
@@ -52,7 +86,8 @@ export function enforceShellPolicy(
     tier: classification.tier,
     rules: classification.rules,
     decision: decision.decision,
-    mode: config.execution.mode,
+    mode: resolved.mode,
+    workspaceProfile: resolved.profilePath,
     approvalClaimed: decision.approvalClaimed ?? (approvedByUser === true && classification.tier >= 2),
     commandPreview: commandPreview(fields.command),
   });
@@ -231,11 +266,15 @@ export interface SandboxVerdict {
  * executions when an adapter is available; requireSandboxForAutonomous
  * hard-gates tier-2 commands on sandbox availability.
  */
-export function sandboxDecision(config: ServerConfig, tier: number): SandboxVerdict {
-  if (config.execution.sandbox === "none") return { enabled: false };
+export function sandboxDecision(config: ServerConfig, tier: number, workspaceRoot?: string): SandboxVerdict {
+  const resolved = workspaceRoot
+    ? resolveExecutionForWorkspace(config, workspaceRoot)
+    : globalExecution(config);
+  const sandboxSetting = resolved.sandbox ?? config.execution.sandbox;
+  if (sandboxSetting === "none") return { enabled: false };
   const available = probeSandboxAdapter() !== "none";
-  const autonomous = config.execution.mode === "autonomous";
-  if (autonomous && tier >= 2 && !available && config.execution.requireSandboxForAutonomous) {
+  const autonomous = resolved.mode === "autonomous";
+  if (autonomous && tier >= 2 && !available && resolved.requireSandboxForAutonomous) {
     return {
       enabled: false,
       denialReason:
@@ -245,4 +284,16 @@ export function sandboxDecision(config: ServerConfig, tier: number): SandboxVerd
     };
   }
   return { enabled: autonomous && available };
+}
+
+function globalExecution(config: ServerConfig): ResolvedExecution {
+  return {
+    mode: config.execution.mode,
+    sandbox: undefined,
+    sandboxNetwork: undefined,
+    requireSandboxForAutonomous: config.execution.requireSandboxForAutonomous,
+    commandAllow: [],
+    commandDeny: [],
+    agentsAllowed: true,
+  };
 }

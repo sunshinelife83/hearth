@@ -244,8 +244,16 @@ export class WorkspaceRegistry {
     };
   }
 
-  getWorkspace(workspaceId: string): Workspace {
-    const workspace = this.workspaces.get(workspaceId);
+  /** Open workspaces held in memory (dashboard visibility; no ordering guarantee). */
+  listWorkspaces(): Array<Pick<Workspace, "id" | "root" | "mode">> {
+    return [...this.workspaces.values()].map((workspace) => ({
+      id: workspace.id,
+      root: workspace.root,
+      mode: workspace.mode,
+    }));
+  }
+
+  getWorkspace(workspaceId: string): Workspace {    const workspace = this.workspaces.get(workspaceId);
     if (workspace) {
       this.workspaces.delete(workspaceId);
       this.workspaces.set(workspaceId, workspace);
@@ -509,7 +517,7 @@ const SKIPPED_CONTEXT_DIRS = new Set([
   ".git",
   ".hg",
   ".svn",
-  ".devspace",
+  ".hearth",
   "node_modules",
   "dist",
   "build",

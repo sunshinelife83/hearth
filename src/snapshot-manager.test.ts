@@ -19,7 +19,7 @@ describe("snapshot manager", () => {
   let workspaceRoot = "";
 
   before(async () => {
-    root = await mkdtemp(join(tmpdir(), "devspace-snapshot-test-"));
+    root = await mkdtemp(join(tmpdir(), "hearth-snapshot-test-"));
     workspaceRoot = join(root, "repo");
     await mkdir(workspaceRoot, { recursive: true });
     await git(workspaceRoot, ["init", "-q"]);

@@ -4,15 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "./config.js";
 import { loadLocalAgentProfiles } from "./local-agent-profiles.js";
-import { writeTestDevspaceConfig } from "./test-support/config.test.js";
+import { writeTestHearthConfig } from "./test-support/config.test.js";
 
-const root = await mkdtemp(join(tmpdir(), "devspace-agent-profiles-test-"));
+const root = await mkdtemp(join(tmpdir(), "hearth-agent-profiles-test-"));
 
 try {
-  const configDir = join(root, ".devspace-home");
+  const configDir = join(root, ".hearth-home");
   const workspaceRoot = join(root, "project");
   await mkdir(join(configDir, "agents"), { recursive: true });
-  await mkdir(join(workspaceRoot, ".devspace", "agents"), { recursive: true });
+  await mkdir(join(workspaceRoot, ".hearth", "agents"), { recursive: true });
 
   await writeFile(
     join(configDir, "agents", "reviewer.md"),
@@ -29,7 +29,7 @@ try {
     ].join("\n"),
   );
   await writeFile(
-    join(workspaceRoot, ".devspace", "agents", "reviewer.md"),
+    join(workspaceRoot, ".hearth", "agents", "reviewer.md"),
     [
       "---",
       "name: reviewer",
@@ -44,7 +44,7 @@ try {
     ].join("\n"),
   );
   await writeFile(
-    join(workspaceRoot, ".devspace", "agents", "disabled.md"),
+    join(workspaceRoot, ".hearth", "agents", "disabled.md"),
     [
       "---",
       "name: disabled",
@@ -58,7 +58,7 @@ try {
     ].join("\n"),
   );
 
-  const enabledConfig = loadConfig(writeTestDevspaceConfig(configDir, {
+  const enabledConfig = loadConfig(writeTestHearthConfig(configDir, {
     workspaces: { allowedRoots: [workspaceRoot] },
     subagents: { enabled: true, providers: [] },
   }));
@@ -72,7 +72,7 @@ try {
   assert.equal(profiles[0]?.effort, "high");
   assert.equal(profiles[0]?.body, "Project body.");
   await writeFile(
-    join(workspaceRoot, ".devspace", "agents", "custom.md"),
+    join(workspaceRoot, ".hearth", "agents", "custom.md"),
     [
       "---",
       "name: custom",
@@ -87,7 +87,7 @@ try {
   const profilesWithInvalid = await loadLocalAgentProfiles(enabledConfig, workspaceRoot);
   assert.deepEqual(profilesWithInvalid.map((profile) => profile.name), ["reviewer"]);
 
-  const disabledConfig = loadConfig(writeTestDevspaceConfig(configDir, {
+  const disabledConfig = loadConfig(writeTestHearthConfig(configDir, {
     workspaces: { allowedRoots: [workspaceRoot] },
     subagents: { enabled: false, providers: [] },
   }));

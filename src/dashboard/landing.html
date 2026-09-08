@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth — local AI engineering runtime</title>
+<link rel="stylesheet" href="/dashboard/styles.css">
+</head>
+<body>
+<main>
+  <h1>Hearth</h1>
+  <p>Your computer as a local-first AI software engineering runtime, exposed
+  to ChatGPT, Claude, and other MCP-compatible clients. You run the server,
+  the execution environment, and the workspace authority.</p>
+
+  <div class="card">
+    <h3>Install</h3>
+    <p>Install once, then <code>hearth</code> works like <code>opencode</code>:</p>
+    <pre>npm install -g @waishnav/hearth
+hearth init
+hearth serve</pre>
+    <p class="muted">Then <code>hearth connect</code> prints per-host steps, and <code>hearth doctor</code> checks Node, Git, Bash, URLs, and hosts.</p>
+    <p class="muted">From a source checkout: <code>./install.sh</code>, then <code>hearth init</code>. Requires Node 22.19+.</p>
+  </div>
+
+  <div class="card">
+    <h3>Use it</h3>
+    <ol>
+      <li>Run <code>hearth serve</code> (or <code>hearth mcp</code> for local stdio).</li>
+      <li>Open the <a href="/dashboard">local dashboard</a> and sign in with your Owner password.</li>
+      <li>Run <code>hearth connect</code> and paste the public <code>/mcp</code> URL into your MCP client (via your own tunnel for remote clients).</li>
+      <li>Ask it to open a project, plan a task, delegate to a coding agent, verify, land.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>Connect</h3>
+    <p>Each PC has a stable <code>hearth-xxxx</code> identity (<code>hearth id</code>). Do not reuse one public URL on two PCs — OAuth tokens are bound to that machine's resource URL.</p>
+    <ul>
+      <li><strong>ChatGPT:</strong> add the public <code>/mcp</code> URL as a connector, approve with the Owner password.</li>
+      <li><strong>Claude:</strong> same public <code>/mcp</code> URL; ensure <code>oauth.allowedRedirectHosts</code> includes <code>claude.ai</code>. Or <code>hearth token create claude-local</code> + <code>hearth mcp</code> for local stdio.</li>
+      <li><strong>Any MCP client:</strong> remote OAuth via public <code>/mcp</code>, or local <code>hearth mcp</code> with a device token bearer.</li>
+    </ul>
+    <p class="muted">Tip: <code>hearth connect chatgpt|claude|generic</code> prints the exact snippet for this machine. <a href="/healthz">/healthz</a> reports this machine's id and MCP URL.</p>
+  </div>
+
+  <div class="card">
+    <h3>Endpoints</h3>
+    <table>
+      <tr><td><a href="/dashboard">/dashboard</a></td><td>Local ops console (Owner sign-in)</td></tr>
+      <tr><td><code>/mcp</code></td><td>MCP endpoint (OAuth bearer)</td></tr>
+      <tr><td><a href="/healthz">/healthz</a></td><td>Liveness probe</td></tr>
+    </table>
+  </div>
+</main>
+</body>
+</html>

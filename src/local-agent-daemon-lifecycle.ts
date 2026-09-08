@@ -43,7 +43,7 @@ export function localAgentDaemonPaths(
     secretPath: join(resolvedStateDir, LOCAL_AGENT_DAEMON_SECRET_NAME),
     logPath: join(resolvedStateDir, LOCAL_AGENT_DAEMON_LOG_NAME),
     endpoint: platform === "win32"
-      ? `\\\\.\\pipe\\devspace-agentd-${hashStateDir(resolvedStateDir)}`
+      ? `\\\\.\\pipe\\hearth-agentd-${hashStateDir(resolvedStateDir)}`
       : socketPath,
   };
 }

@@ -78,6 +78,9 @@ export function wrapCommandWithSandbox(
       "--die-with-parent",
       "--new-session",
       ...(options.allowNetwork ? [] : ["--unshare-net"]),
+      // "--" stops bwrap option parsing; without it a shell like
+      // `zsh -lc cmd` makes bwrap consume `-lc` as its own options.
+      "--",
       shell.executable,
       ...shell.args,
     ];

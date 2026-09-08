@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -10,9 +11,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  loadDevspaceFiles,
-  setDevspaceConfigValue,
-  setDevspaceConfigValues,
+  loadHearthFiles,
+  setHearthConfigValue,
+  setHearthConfigValues,
 } from "./user-config.js";
 
 withConfigDir((configDir, env) => {
@@ -20,7 +21,7 @@ withConfigDir((configDir, env) => {
     host: "0.0.0.0",
     port: 8787,
     allowedRoots: ["/work"],
-    publicBaseUrl: "https://devspace.example.com",
+    publicBaseUrl: "https://hearth.example.com",
     artifactsEnabled: true,
     subagents: true,
   }));
@@ -28,7 +29,7 @@ withConfigDir((configDir, env) => {
     ownerToken: "test-owner-token",
   }));
 
-  const files = loadDevspaceFiles(env);
+  const files = loadHearthFiles(env);
   assert.equal(files.migratedLegacyConfig, true);
   assert.equal(files.config.server.host, "0.0.0.0");
   assert.equal(files.config.server.port, 8787);
@@ -42,7 +43,7 @@ withConfigDir((configDir, env) => {
   assert.equal(existsSync(join(configDir, "config.jsonc")), true);
   assert.equal(existsSync(join(configDir, "config.json.v1.0.bak")), true);
 
-  const nextLoad = loadDevspaceFiles(env);
+  const nextLoad = loadHearthFiles(env);
   assert.equal(nextLoad.migratedLegacyConfig, false);
 });
 
@@ -61,7 +62,7 @@ await withConfigDirAsync(async (configDir) => {
   assert.equal(existsSync(join(configDir, "config.json")), false);
   assert.equal(existsSync(join(configDir, "config.jsonc")), true);
   assert.equal(existsSync(join(configDir, "config.json.v1.0.bak")), true);
-  assert.equal(loadDevspaceFiles({ DEVSPACE_CONFIG_DIR: configDir }).config.server.port, 8787);
+  assert.equal(loadHearthFiles({ HEARTH_CONFIG_DIR: configDir }).config.server.port, 8787);
 });
 
 withConfigDir((configDir, env) => {
@@ -73,43 +74,43 @@ withConfigDir((configDir, env) => {
     },
   }\n`);
 
-  const files = loadDevspaceFiles(env);
+  const files = loadHearthFiles(env);
   assert.equal(files.config.server.port, 8787);
   assert.equal(files.config.tools.mode, "codex");
 
-  setDevspaceConfigValue(["server", "publicBaseUrl"], "https://new.example.com", env);
+  setHearthConfigValue(["server", "publicBaseUrl"], "https://new.example.com", env);
   const updated = readFileSync(join(configDir, "config.jsonc"), "utf8");
   assert.match(updated, /This comment must survive config updates/);
-  assert.equal(loadDevspaceFiles(env).config.server.publicBaseUrl, "https://new.example.com");
+  assert.equal(loadHearthFiles(env).config.server.publicBaseUrl, "https://new.example.com");
 
-  setDevspaceConfigValues([
-    { path: ["server", "port"], value: 7676 },
+  setHearthConfigValues([
+    { path: ["server", "port"], value: 7176 },
     { path: ["tools", "mode"], value: "claude" },
   ], env);
   const multiUpdated = readFileSync(join(configDir, "config.jsonc"), "utf8");
   assert.match(multiUpdated, /This comment must survive config updates/);
-  assert.equal(loadDevspaceFiles(env).config.server.port, 7676);
-  assert.equal(loadDevspaceFiles(env).config.tools.mode, "claude");
+  assert.equal(loadHearthFiles(env).config.server.port, 7176);
+  assert.equal(loadHearthFiles(env).config.tools.mode, "claude");
 });
 
 withConfigDir((configDir, env) => {
   writeFileSync(join(configDir, "config.jsonc"), JSON.stringify({ configVersion: 1 }));
   writeFileSync(join(configDir, "config.json"), "{");
-  assert.equal(loadDevspaceFiles(env).config.server.port, 7676);
+  assert.equal(loadHearthFiles(env).config.server.port, 7176);
   assert.equal(existsSync(join(configDir, "config.json")), true);
 });
 
 withConfigDir((configDir, env) => {
   writeFileSync(join(configDir, "config.jsonc"), "{");
   writeFileSync(join(configDir, "config.json"), JSON.stringify({ port: 8787 }));
-  assert.throws(() => loadDevspaceFiles(env), /Unable to read .*config\.jsonc/);
+  assert.throws(() => loadHearthFiles(env), /Unable to read .*config\.jsonc/);
   assert.equal(existsSync(join(configDir, "config.json")), true);
 });
 
 withConfigDir((configDir, env) => {
   writeFileSync(join(configDir, "config.json"), JSON.stringify({ unknownSetting: true }));
   assert.throws(
-    () => loadDevspaceFiles(env),
+    () => loadHearthFiles(env),
     /Unsupported legacy configuration keys: unknownSetting/,
   );
   assert.equal(existsSync(join(configDir, "config.json")), true);
@@ -121,23 +122,49 @@ withConfigDir((configDir, env) => {
   const legacyPath = join(configDir, "config.json");
   const backupPath = join(configDir, "config.json.v1.0.bak");
   writeFileSync(legacyPath, JSON.stringify({ port: 8787 }));
-  writeFileSync(backupPath, JSON.stringify({ port: 7676 }));
+  writeFileSync(backupPath, JSON.stringify({ port: 7176 }));
 
   assert.throws(
-    () => loadDevspaceFiles(env),
+    () => loadHearthFiles(env),
     (error: unknown) => error instanceof Error
       && error.message.includes(`backup already exists at ${backupPath}`)
-      && error.message.includes(`Move ${backupPath} out of the way, then run DevSpace again.`),
+      && error.message.includes(`Move ${backupPath} out of the way, then run Hearth again.`),
   );
 });
 
 console.log("user config tests passed");
 
+{
+  // One-time adoption of a pre-rename ~/.devspace install.
+  const sandbox = mkdtempSync(join(tmpdir(), "hearth-legacy-adopt-test-"));
+  const savedHome = process.env.HOME;
+  try {
+    const legacyDir = join(sandbox, "legacy", ".devspace");
+    mkdirSync(legacyDir, { recursive: true });
+    writeFileSync(join(legacyDir, "config.jsonc"), JSON.stringify({ configVersion: 1, server: { port: 8787 } }));
+    writeFileSync(join(legacyDir, "auth.json"), JSON.stringify({ ownerToken: "legacy-token-long-enough" }));
+    process.env.HOME = join(sandbox, "home");
+    const fresh = loadHearthFiles({ HEARTH_LEGACY_DEVSPACE_DIR: legacyDir });
+    assert.equal(fresh.migratedFromDevspace, true);
+    assert.equal(fresh.config.server.port, 8787);
+    assert.equal(fresh.auth.ownerToken, "legacy-token-long-enough");
+    assert.equal(existsSync(join(legacyDir, "config.jsonc")), true, "originals kept");
+    const second = loadHearthFiles({ HEARTH_LEGACY_DEVSPACE_DIR: legacyDir });
+    assert.equal(second.migratedFromDevspace, false, "adoption runs once");
+  } finally {
+    if (savedHome === undefined) delete process.env.HOME;
+    else process.env.HOME = savedHome;
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+}
+
+console.log("legacy adoption tests passed");
+
 function withConfigDir(
   test: (configDir: string, env: NodeJS.ProcessEnv) => void,
 ): void {
-  const configDir = mkdtempSync(join(tmpdir(), "devspace-user-config-test-"));
-  const env = { DEVSPACE_CONFIG_DIR: configDir };
+  const configDir = mkdtempSync(join(tmpdir(), "hearth-user-config-test-"));
+  const env = { HEARTH_CONFIG_DIR: configDir };
   try {
     test(configDir, env);
   } finally {
@@ -148,7 +175,7 @@ function withConfigDir(
 async function withConfigDirAsync(
   test: (configDir: string) => Promise<void>,
 ): Promise<void> {
-  const configDir = mkdtempSync(join(tmpdir(), "devspace-user-config-test-"));
+  const configDir = mkdtempSync(join(tmpdir(), "hearth-user-config-test-"));
   try {
     await test(configDir);
   } finally {
@@ -161,8 +188,8 @@ async function migrateInChildProcess(
 ): Promise<{ migrated: boolean }> {
   const moduleUrl = new URL("./user-config.ts", import.meta.url).href;
   const source = [
-    `import { loadDevspaceFiles } from ${JSON.stringify(moduleUrl)};`,
-    "const files = loadDevspaceFiles();",
+    `import { loadHearthFiles } from ${JSON.stringify(moduleUrl)};`,
+    "const files = loadHearthFiles();",
     "process.stdout.write(JSON.stringify({ migrated: files.migratedLegacyConfig }));",
   ].join("\n");
 
@@ -171,7 +198,7 @@ async function migrateInChildProcess(
       process.execPath,
       ["--import", "tsx", "--input-type=module", "--eval", source],
       {
-        env: { ...process.env, DEVSPACE_CONFIG_DIR: configDir },
+        env: { ...process.env, HEARTH_CONFIG_DIR: configDir },
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
