@@ -11,10 +11,15 @@ This guide covers ChatGPT and Coding Agents using Hearth with local projects.
 - a public HTTPS URL that forwards to the local Hearth server, only when
   ChatGPT will connect
 
-Hearth does not create the public tunnel for you. ChatGPT users need a public
-HTTPS URL forwarding to the local server: their own reverse proxy or tunnel,
-or Hearth's relay-free direct exposure (own domain + TLS, see
-`hearth expose`).
+ChatGPT users need a public HTTPS URL forwarding to the local server. Three
+ways to get one:
+
+1. **Managed per-PC tunnel (recommended):** `hearth tunnel setup` provisions
+   a named Cloudflare Tunnel on this PC with a stable hostname — see
+   [Managed Tunnel](#managed-tunnel-every-pc-is-server-url-and-tunnel).
+2. Their own reverse proxy or tunnel.
+3. Hearth's relay-free direct exposure (own domain + TLS, see
+   `hearth expose`).
 
 ## Install And Configure
 
@@ -118,6 +123,38 @@ npx @sunshinelife83/hearth serve
 
 Use the origin only — never append `/mcp` to `publicBaseUrl`. The client URL is
 `<origin>/mcp`. `hearth doctor --fix` repairs a saved `/mcp` suffix.
+
+## Managed Tunnel: Every PC Is Server, URL, And Tunnel
+
+`hearth tunnel` provisions a named Cloudflare Tunnel on the PC it runs on, so
+`hearth serve` alone is server + stable public URL + tunnel. No second
+terminal, no pasted tunnel URLs, no hostname churn on restart.
+
+Prerequisites (once per PC):
+
+- `cloudflared` installed (`brew install cloudflared`, the Linux package for
+  your distro, or `winget install --id Cloudflare.cloudflared`)
+- `cloudflared tunnel login` completed once (browser session)
+- a Cloudflare zone for the hostname you will serve
+
+Then:
+
+```bash
+hearth tunnel setup --hostname hearth.example.com
+hearth serve
+hearth tunnel status
+```
+
+What setup does: creates (or reuses) a tunnel named after this PC's machine
+id, routes the hostname to it, writes an ingress file exposing only the AI
+endpoints (`/mcp`, OAuth, discovery, health — the dashboard stays
+localhost-only behind an edge 404), stores credentials under the state dir at
+`0600`, and syncs `server.publicBaseUrl` plus `server.trustProxy`. Scripted
+setups can pass `--yes` (requires `--hostname`).
+
+`hearth serve` supervises the tunnel child and fails fast if the tunnel is
+misconfigured instead of serving locally-but-dark. `hearth doctor` checks the
+binary, credentials, ingress file, and hostname match.
 
 ## Connect A Host (ChatGPT / Claude / Generic)
 

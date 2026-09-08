@@ -30,6 +30,14 @@ Run `hearth init` to create both files. `hearth config set publicBaseUrl
     "allowedHosts": [],
     "trustProxy": false,
   },
+  "tunnel": {
+    // Managed per-PC tunnel. `hearth tunnel setup` writes this section,
+    // keeps publicBaseUrl in sync, and enables trustProxy. Credentials live
+    // in the state dir, never here.
+    "provider": "none",
+    "hostname": null,
+    "tunnelId": null,
+  },
   "workspaces": {
     "allowedRoots": ["~/personal", "~/work"],
     "worktreeRoot": "~/.hearth/worktrees",

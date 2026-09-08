@@ -25,6 +25,12 @@ export interface TlsConfig {
   acmeDir: string | null;
 }
 
+export interface TunnelConfig {
+  provider: "none" | "cloudflared";
+  hostname: string | null;
+  tunnelId: string | null;
+}
+
 export interface WorkspaceProfileConfig {
   path: string;
   mode?: ExecutionMode;
@@ -63,6 +69,7 @@ export interface ServerConfig {
   agentDir: string;
   logging: LoggingConfig;
   tls: TlsConfig;
+  tunnel: TunnelConfig;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -73,12 +80,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const publicBaseUrl = parsePublicBaseUrl(
     stored.server.publicBaseUrl ?? localPublicBaseUrl(host, port),
   );
+  const tunnelHostname = stored.tunnel.provider === "cloudflared" && stored.tunnel.hostname
+    ? parseTunnelHostname(stored.tunnel.hostname)
+    : null;
   const derivedAllowedHosts = [
     "localhost",
     "127.0.0.1",
     "::1",
     host,
     new URL(publicBaseUrl).hostname,
+    ...(tunnelHostname ? [tunnelHostname] : []),
     ...stored.server.allowedHosts,
   ];
 
@@ -142,6 +153,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       keyFile: stored.tls.keyFile,
       acmeDir: stored.tls.acmeDir,
     },
+    tunnel: {
+      provider: stored.tunnel.provider,
+      hostname: stored.tunnel.hostname,
+      tunnelId: stored.tunnel.tunnelId,
+    },
   };
 }
 
@@ -169,8 +185,13 @@ function parseRequiredSecret(value: string | undefined): string {
   return secret;
 }
 
-function parsePublicBaseUrl(value: string): string {
-  const parsed = new URL(value);
+function parseTunnelHostname(value: string): string | null {
+  const trimmed = value.trim().replace(/^https?:\/\//i, "").split("/")[0]!.trim();
+  if (!trimmed || /\s/.test(trimmed)) return null;
+  return trimmed.toLowerCase();
+}
+
+function parsePublicBaseUrl(value: string): string {  const parsed = new URL(value);
   parsed.hash = "";
   parsed.search = "";
   parsed.pathname = parsed.pathname.replace(/\/+$/, "");

@@ -30,6 +30,20 @@ const tlsConfigSchema = z.object({
   acmeDir: z.string().trim().min(1).nullable().default(null),
 }).strict().prefault({});
 
+const tunnelConfigSchema = z.object({
+  // Managed per-PC tunnel. "none" keeps today's behavior (own reverse
+  // proxy or direct exposure). "cloudflared" lets `hearth tunnel setup`
+  // provision a named Cloudflare Tunnel on this PC and `hearth serve`
+  // supervise it, so one command is server + URL + tunnel.
+  provider: z.enum(["none", "cloudflared"]).default("none"),
+  // Public hostname served through the tunnel (origin only, no path).
+  // `hearth tunnel setup` sets this and keeps server.publicBaseUrl in sync.
+  hostname: z.string().trim().min(1).nullable().default(null),
+  // Cloudflare tunnel UUID. Credentials live in the state dir
+  // (stateDir/tunnels/cloudflared/<tunnelId>.json, 0600), never in config.
+  tunnelId: z.string().trim().min(1).nullable().default(null),
+}).strict().prefault({});
+
 const workspaceProfileSchema = z.object({
   path: z.string().trim().min(1).describe("Absolute path (or ~-prefixed) this profile applies to; longest prefix wins."),
   mode: z.enum(["readonly", "supervised", "autonomous"]).optional(),
@@ -133,6 +147,7 @@ export const hearthConfigSchema = z.object({
   execution: executionConfigSchema,
   logging: loggingConfigSchema,
   tls: tlsConfigSchema.default({ certFile: null, keyFile: null, acmeDir: null }),
+  tunnel: tunnelConfigSchema.default({ provider: "none", hostname: null, tunnelId: null }),
   oauth: oauthConfigSchema,
 }).strict();
 

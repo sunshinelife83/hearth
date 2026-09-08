@@ -102,11 +102,35 @@ Update the configured URL:
 npx @sunshinelife83/hearth config set publicBaseUrl https://new-tunnel.example.com
 ```
 
-For a stable URL:
+For a stable URL, use a managed tunnel instead of a temporary one:
 
 ```bash
-npx @sunshinelife83/hearth config set publicBaseUrl https://hearth.example.com
+npx @sunshinelife83/hearth tunnel setup --hostname hearth.example.com
 ```
+
+## Managed Tunnel Problems
+
+Run `hearth tunnel status` and `hearth doctor` first; most answers are there.
+
+- **`cloudflared was not found`**: install the binary (see `hearth tunnel setup`
+  output), then re-run setup.
+- **Not logged in**: run `cloudflared tunnel login` once, then re-run setup.
+- **`tunnel create` succeeds but credentials are missing**: copy the
+  `<tunnel-id>.json` file next to the tunnel before re-running; Cloudflare
+  cannot re-issue it.
+- **Name taken without local credentials**: delete the remote tunnel
+  (`cloudflared tunnel delete <name>`), copy its credentials into place, or
+  pick another name with `--name`.
+- **Cloudflare 1033 / hostname unreachable**: the tunnel connector is down.
+  Check `cloudflared tunnel info <name>` for zero connections and restart
+  `hearth serve`. After a Cloudflare incident, restart the connector.
+- **Every route 404s though Hearth is healthy**: the edge catch-all is
+  shadowing real rules. Re-run `hearth tunnel setup` to regenerate the
+  ingress file (Hearth always writes `http_status:404` last).
+- **Hostname resolves but Hearth rejects with 403**: the tunnel hostname and
+  `server.publicBaseUrl` disagree. Re-run setup for the right hostname.
+- **`/dashboard` unreachable remotely**: intentional. The managed ingress only
+  exposes AI endpoints; the dashboard stays localhost-only.
 
 ## Host Header Or 403 Problems
 

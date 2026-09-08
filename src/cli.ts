@@ -52,6 +52,28 @@ import {
 import { expandHomePath } from "./roots.js";
 import { readReviewRef } from "./review-checkpoints.js";
 import { shutdownHttpServer } from "./server-shutdown.js";
+import {
+  buildIngressConfig,
+  checkCloudflaredLogin,
+  cloudflaredInstallHint,
+  cloudflaredVersion,
+  createTunnel,
+  findCloudflared,
+  installTunnelCredentials,
+  isTunnelChildAlive,
+  listTunnels,
+  normalizeTunnelHostname,
+  routeTunnelDns,
+  startTunnelChild,
+  tunnelInfo,
+  tunnelNameForMachine,
+  tunnelPaths,
+  validateIngressModel,
+  validateManagedTunnel,
+  validateRenderedConfig,
+  validateTunnelHostname,
+  writeTunnelConfig,
+} from "./tunnel-cloudflared.js";
 
 type Command =
   | "serve"
@@ -65,6 +87,7 @@ type Command =
   | "expose"
   | "id"
   | "connect"
+  | "tunnel"
   | "help"
   | "version";
 const require = createRequire(import.meta.url);
@@ -109,6 +132,9 @@ async function main(argv: string[]): Promise<void> {
     case "connect":
       await runConnect(args);
       return;
+    case "tunnel":
+      await runTunnelCli(args);
+      return;
     case "show-changes":
       await runShowChanges(args);
       return;
@@ -133,6 +159,7 @@ function normalizeCommand(command: string | undefined): Command {
     || command === "show-changes"
     || command === "expose"
     || command === "connect"
+    || command === "tunnel"
     || command === "id"
   ) return command;
   if (command === "help" || command === "--help" || command === "-h") return "help";
@@ -315,15 +342,16 @@ async function runInit({ force, yes, roots, publicUrl, use, providers }: InitOpt
         }
         publicBaseUrl = normalizePublicBaseUrl(files.config.server.publicBaseUrl);
       } else {
-        prompts.note(
-          [
-            `Point your HTTPS tunnel or reverse proxy to http://127.0.0.1:${port}.`,
-            "Paste its public URL below.",
-            "",
-            "Example: https://your-tunnel-host.example.com",
-          ].join("\n"),
-          "Connect ChatGPT",
-        );
+      prompts.note(
+        [
+          `Point your HTTPS tunnel or reverse proxy to http://127.0.0.1:${port}.`,
+          "Paste its public URL below, or skip this and run `hearth tunnel setup`",
+          "afterwards for a managed per-PC Cloudflare Tunnel instead.",
+          "",
+          "Example: https://your-tunnel-host.example.com",
+        ].join("\n"),
+        "Connect ChatGPT",
+      );
         publicBaseUrl = normalizePublicBaseUrl(await textPrompt({
           message: files.config.server.publicBaseUrl
             ? `What public URL will ChatGPT connect to? Press Enter to keep ${files.config.server.publicBaseUrl}`
@@ -498,7 +526,7 @@ async function runMcp(): Promise<void> {
 }
 
 function logServeBanner(
-  config: { host: string; port: number; publicBaseUrl: string; allowedRoots: string[]; allowedHosts: string[]; logging: { level: string; format: string }; stateDir: string },
+  config: { host: string; port: number; publicBaseUrl: string; allowedRoots: string[]; allowedHosts: string[]; logging: { level: string; format: string }; stateDir: string; tunnel: { provider: string; hostname: string | null; tunnelId: string | null } },
   localAgentProviders: readonly import("./local-agent-catalog.js").LocalAgentProviderStatus[],
   scheme: "http" | "https",
 ): void {
@@ -512,6 +540,9 @@ function logServeBanner(
   const publicMcpUrl = new URL("/mcp", config.publicBaseUrl).toString();
   console.log(`hearth listening on ${scheme}://${config.host}:${config.port}/mcp`);
   console.log(`public MCP URL: ${publicMcpUrl}`);
+  if (config.tunnel.provider === "cloudflared" && config.tunnel.hostname) {
+    console.log(`tunnel: cloudflared ${config.tunnel.hostname} (managed — server, URL, and tunnel in one command)`);
+  }
   console.log(`machine: ${machineId} (hearth id, diagnostic label only — not a security boundary)`);
   console.log(`dashboard: ${scheme}://${config.host}:${config.port}/dashboard`);
   console.log(`public base url: ${config.publicBaseUrl}`);
@@ -525,6 +556,64 @@ function logServeBanner(
   console.log(`logging: ${config.logging.level} ${config.logging.format}`);
   console.log(`subagent providers: ${formatLocalAgentProviderStatusSummary(localAgentProviders)}`);
   console.log("next: run `hearth connect` for ChatGPT / Claude / generic MCP steps");
+}
+
+/**
+ * Validate managed-tunnel config and start the supervised cloudflared child.
+ * Fail-fast: a managed tunnel that cannot start must stop `serve`, never
+ * leave Hearth reachable locally but dark publicly.
+ */
+function startManagedTunnel(config: {
+  host: string;
+  port: number;
+  publicBaseUrl: string;
+  stateDir: string;
+  oauth: { trustProxy: boolean };
+  tunnel: { provider: string; hostname: string | null; tunnelId: string | null };
+}): { stop(): Promise<void> } {
+  const problems: string[] = [];
+  const { existsSync, readFileSync } = require("node:fs") as typeof import("node:fs");
+  let credentialsExist = false;
+  let ingressContent: string | undefined;
+  let configPath = "";
+  if (config.tunnel.tunnelId) {
+    const paths = tunnelPaths(config.stateDir, config.tunnel.tunnelId);
+    configPath = paths.configPath;
+    credentialsExist = existsSync(paths.credentialsPath);
+    try {
+      ingressContent = readFileSync(paths.configPath, "utf8");
+    } catch {
+      ingressContent = undefined;
+    }
+  }
+  problems.push(...validateManagedTunnel({
+    hostname: config.tunnel.hostname,
+    tunnelId: config.tunnel.tunnelId,
+    publicBaseUrl: config.publicBaseUrl,
+    trustProxy: config.oauth.trustProxy,
+    binary: findCloudflared(),
+    credentialsExist,
+    ingressContent,
+  }));
+  if (problems.length > 0) {
+    throw new Error(["Managed tunnel is misconfigured:", ...problems.map((problem) => `  - ${problem}`)].join("\n"));
+  }
+  const binary = findCloudflared();
+  const paths = tunnelPaths(config.stateDir, config.tunnel.tunnelId!);
+  console.log(`tunnel: starting managed cloudflared for ${config.tunnel.hostname} ...`);
+  const supervised = startTunnelChild({
+    binary: binary!,
+    configPath,
+    tunnelId: config.tunnel.tunnelId!,
+    pidPath: paths.pidPath,
+    onLog: (line) => console.error(`[tunnel] ${line}`),
+  });
+  supervised.process.once("exit", (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(`[tunnel] cloudflared exited with code ${code}; public URL is dark while serve keeps running locally. Restart serve or run \`hearth tunnel status\`.`);
+    }
+  });
+  return supervised;
 }
 
 async function serve(): Promise<void> {
@@ -543,6 +632,7 @@ async function serve(): Promise<void> {
 
   const { createServer } = await import("./server.js");
   const config = loadConfig();
+  const managedTunnel = config.tunnel.provider === "cloudflared" ? startManagedTunnel(config) : undefined;
   const { app, close, localAgentProviders } = createServer(config);
   const tlsOn = Boolean(config.tls.certFile && config.tls.keyFile);
   if (Boolean(config.tls.certFile) !== Boolean(config.tls.keyFile)) {
@@ -572,6 +662,13 @@ async function serve(): Promise<void> {
   const shutdown = async () => {
     if (shuttingDown) return;
     shuttingDown = true;
+    if (managedTunnel) {
+      try {
+        await managedTunnel.stop();
+      } catch (error) {
+        console.error(`tunnel shutdown failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     await shutdownHttpServer(httpServer, close);
     process.exit(0);
   };
@@ -628,7 +725,9 @@ async function runDoctor({ fix }: { fix: boolean }): Promise<void> {
     console.log(`Subagents: ${config.subagents.enabled ? "enabled" : "disabled"}`);
     console.log(`Subagent providers: ${formatLocalAgentProviderStatusSummary(providers)}`);
     console.log(`Tool mode: ${config.toolMode}`);
+    console.log(`Tunnel: ${describeTunnelConfig(config.tunnel)}`);
     const warnings: string[] = [];
+    warnings.push(...checkTunnelConfig({ ...config, trustProxy: config.oauth.trustProxy }));
     if (config.allowedHosts.includes("*")) warnings.push("server.allowedHosts contains '*': Host header checks are disabled (local debugging only).");
     if (config.allowedRoots.length === 0) warnings.push("workspaces.allowedRoots is empty: MCP file tools fall back to cwd. Run hearth init to set narrow roots.");
     if (!config.publicBaseUrl.startsWith("https://") && config.publicBaseUrl !== `http://${config.host}:${config.port}`) {
@@ -667,6 +766,9 @@ async function runConnect(args: string[]): Promise<void> {
   const lines: string[] = [
     `machine: ${identity.id} (${identity.hostname})`,
     `public MCP URL (use this in remote clients): ${publicMcpUrl}`,
+    config.tunnel.provider === "cloudflared" && config.tunnel.hostname
+      ? `tunnel: managed cloudflared (${config.tunnel.hostname}) — \`hearth serve\` starts everything`
+      : "tunnel: none managed (external reverse proxy; `hearth tunnel setup` provisions a managed one)",
     `local MCP URL: ${localMcpUrl}`,
     `dashboard: http://${config.host}:${config.port}/dashboard`,
     `tool mode: ${config.toolMode} (ChatGPT works with either; Claude Desktop prefers tools.mode claude)`,
@@ -702,6 +804,334 @@ async function runConnect(args: string[]): Promise<void> {
   lines.push("Do not reuse this public URL on another PC: OAuth tokens are bound to this machine's resource URL and owner password.");
   lines.push("The machine id is a diagnostic label, not a security boundary: copying stateDir copies the identity, so it cannot prove which PC answered or prevent cloning.");
   console.log(lines.join("\n"));
+}
+
+function tunnelOrigin(host: string, port: number): string {
+  const bindHost = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+  const formatted = bindHost.includes(":") && !bindHost.startsWith("[") ? `[${bindHost}]` : bindHost;
+  return `http://${formatted}:${port}`;
+}
+
+function printTunnelHelp(): void {
+  console.log(
+    [
+      "Hearth tunnel (managed per-PC Cloudflare Tunnel)",
+      "",
+      "Usage:",
+      "  hearth tunnel setup [--hostname <host>] [--name <tunnel-name>] [--force] [--yes]",
+      "  hearth tunnel status [--json]",
+      "",
+      "setup provisions a named tunnel (hearth-<machine-id>) on this PC,",
+      "routes the hostname to it, writes an AI-endpoints-only ingress file,",
+      "and stores credentials under the state dir (0600). It also sets",
+      "server.publicBaseUrl and server.trustProxy for tunnel operation.",
+      "Needs: cloudflared installed, `cloudflared tunnel login` done once,",
+      "and a Cloudflare zone for the hostname.",
+    ].join("\n"),
+  );
+}
+
+async function runTunnelCli(args: string[]): Promise<void> {
+  const [subcommand, ...rest] = args;
+  if (!subcommand || subcommand === "help" || subcommand === "--help" || subcommand === "-h") {
+    printTunnelHelp();
+    return;
+  }
+  if (subcommand === "status") {
+    await runTunnelStatus(rest.includes("--json"));
+    return;
+  }
+  if (subcommand === "setup") {
+    await runTunnelSetup(rest);
+    return;
+  }
+  throw new Error(`Unknown tunnel command: ${subcommand}. Usage: hearth tunnel <setup|status>`);
+}
+
+function describeTunnelConfig(tunnel: { provider: string; hostname: string | null; tunnelId: string | null }): string {
+  if (tunnel.provider !== "cloudflared") return "none (own reverse proxy or direct exposure)";
+  if (!tunnel.hostname || !tunnel.tunnelId) return "cloudflared (incomplete — re-run `hearth tunnel setup`)";
+  return `cloudflared ${tunnel.hostname} (id ${tunnel.tunnelId})`;
+}
+
+function checkTunnelConfig(config: {
+  stateDir: string;
+  publicBaseUrl: string;
+  trustProxy: boolean;
+  tunnel: { provider: string; hostname: string | null; tunnelId: string | null };
+  oauth: { allowedRedirectHosts: string[] };
+}): string[] {
+  const warnings: string[] = [];
+  if (config.tunnel.provider !== "cloudflared") return warnings;
+  const binary = findCloudflared();
+  if (!binary) {
+    warnings.push("tunnel.provider is cloudflared but no cloudflared binary is on PATH.");
+    return warnings;
+  }
+  if (!config.tunnel.hostname || !config.tunnel.tunnelId) {
+    warnings.push("Managed tunnel is incomplete (hostname or tunnelId missing). Re-run `hearth tunnel setup`.");
+    return warnings;
+  }
+  let publicHost = "";
+  try {
+    publicHost = new URL(config.publicBaseUrl).hostname.toLowerCase();
+  } catch {
+    // loadConfig already guarantees a parseable publicBaseUrl.
+  }
+  if (publicHost !== config.tunnel.hostname.toLowerCase()) {
+    warnings.push(`tunnel.hostname ${config.tunnel.hostname} does not match publicBaseUrl host ${publicHost}. Re-run \`hearth tunnel setup --hostname ${config.tunnel.hostname}\`.`);
+  }
+  if (!config.trustProxy) {
+    warnings.push("Managed tunnel needs server.trustProxy=true so rate limits see real client IPs. Re-run `hearth tunnel setup`.");
+  }
+  const paths = tunnelPaths(config.stateDir, config.tunnel.tunnelId);
+  try {
+    const { existsSync, readFileSync } = require("node:fs") as typeof import("node:fs");
+    if (!existsSync(paths.credentialsPath)) {
+      warnings.push(`Tunnel credentials missing at ${paths.credentialsPath}. Re-run \`hearth tunnel setup\`.`);
+    }
+    try {
+      const rendered = readFileSync(paths.configPath, "utf8");
+      for (const problem of validateRenderedConfig(rendered, config.tunnel.hostname!)) {
+        warnings.push(`Tunnel ingress: ${problem}`);
+      }
+    } catch {
+      warnings.push(`Tunnel ingress file missing at ${paths.configPath}. Re-run \`hearth tunnel setup\`.`);
+    }
+  } catch {
+    warnings.push("Could not inspect tunnel state dir.");
+  }
+  return warnings;
+}
+
+async function runTunnelStatus(json: boolean): Promise<void> {
+  const files = loadHearthFiles();
+  if (!files.configExists || (!files.authExists && !process.env.HEARTH_OAUTH_OWNER_TOKEN)) {
+    throw new Error("Hearth is not configured. Run `hearth init` first, then `hearth tunnel setup`.");
+  }
+  const config = loadConfig();
+  const tunnel = config.tunnel;
+  if (tunnel.provider !== "cloudflared" || !tunnel.hostname || !tunnel.tunnelId) {
+    if (json) {
+      console.log(JSON.stringify({ provider: tunnel.provider, configured: false }));
+      return;
+    }
+    console.log("No managed tunnel. Run `hearth tunnel setup --hostname <host>` to provision one on this PC.");
+    return;
+  }
+  const binary = findCloudflared();
+  const paths = tunnelPaths(config.stateDir, tunnel.tunnelId);
+  const { existsSync, statSync } = await import("node:fs");
+  const credsExists = existsSync(paths.credentialsPath);
+  let credsMode = "missing";
+  if (credsExists && process.platform !== "win32") {
+    try {
+      credsMode = (statSync(paths.credentialsPath).mode & 0o777).toString(8);
+    } catch {
+      credsMode = "unreadable";
+    }
+  } else if (credsExists) {
+    credsMode = "present";
+  }
+  let ingressErrors: string[] = [];
+  try {
+    const rendered = (await import("node:fs")).readFileSync(paths.configPath, "utf8");
+    ingressErrors = validateRenderedConfig(rendered, tunnel.hostname);
+  } catch {
+    ingressErrors = [`tunnel ingress file missing at ${paths.configPath}; re-run \`hearth tunnel setup\`.`];
+  }
+  const childPid = isTunnelChildAlive(paths.pidPath);
+  let edge: { ok: boolean; output: string } = { ok: false, output: "cloudflared not on PATH" };
+  if (binary) {
+    try {
+      edge = tunnelInfo(binary, tunnel.tunnelId);
+    } catch (error) {
+      edge = { ok: false, output: error instanceof Error ? error.message : String(error) };
+    }
+  }
+  if (json) {
+    console.log(JSON.stringify({
+      provider: "cloudflared",
+      configured: true,
+      hostname: tunnel.hostname,
+      tunnelId: tunnel.tunnelId,
+      publicMcpUrl: new URL("/mcp", config.publicBaseUrl).toString(),
+      cloudflared: binary ?? null,
+      credentials: credsExists ? credsMode : "missing",
+      ingressOk: ingressErrors.length === 0,
+      ingressErrors,
+      childPid: childPid ?? null,
+      edgeOk: edge.ok,
+    }));
+    return;
+  }
+  console.log([
+    `tunnel: cloudflared ${tunnel.hostname} (id ${tunnel.tunnelId})`,
+    `public MCP URL: ${new URL("/mcp", config.publicBaseUrl).toString()}`,
+    `cloudflared: ${binary ?? "NOT FOUND on PATH"}`,
+    `credentials: ${credsExists ? `${paths.credentialsPath} (${credsMode})` : "MISSING"}`,
+    childPid ? `serve-managed child: running (pid ${childPid})` : "serve-managed child: not running (start with `hearth serve`)",
+    ingressErrors.length === 0 ? "ingress: AI-endpoints-only file valid" : `ingress problems:\n  - ${ingressErrors.join("\n  - ")}`,
+    edge.ok ? "edge: tunnel reachable via cloudflared" : `edge: not confirmed (${edge.output.split("\n")[0]})`,
+  ].join("\n"));
+}
+
+interface TunnelSetupOptions {
+  hostname?: string;
+  name?: string;
+  force: boolean;
+  yes: boolean;
+}
+
+function parseTunnelSetupArgs(args: string[]): TunnelSetupOptions {
+  const options: TunnelSetupOptions = { force: false, yes: false };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === "--force") options.force = true;
+    else if (arg === "--yes" || arg === "-y") options.yes = true;
+    else if (arg === "--hostname") options.hostname = args[++index];
+    else if (arg.startsWith("--hostname=")) options.hostname = arg.slice("--hostname=".length);
+    else if (arg === "--name") options.name = args[++index];
+    else if (arg.startsWith("--name=")) options.name = arg.slice("--name=".length);
+    else throw new Error(`Unknown tunnel setup option: ${arg}. Usage: hearth tunnel setup [--hostname <host>] [--name <tunnel-name>] [--force] [--yes]`);
+  }
+  return options;
+}
+
+async function runTunnelSetup(args: string[]): Promise<void> {
+  const options = parseTunnelSetupArgs(args);
+  const files = loadHearthFiles();
+  if (!files.configExists || (!files.authExists && !process.env.HEARTH_OAUTH_OWNER_TOKEN)) {
+    throw new Error("Hearth is not configured. Run `hearth init` first, then `hearth tunnel setup`.");
+  }
+  const config = loadConfig();
+  const { loadMachineIdentity } = await import("./machine-id.js");
+  const identity = loadMachineIdentity(config.stateDir);
+
+  const binary = findCloudflared();
+  if (!binary) throw new Error(cloudflaredInstallHint());
+  let version = "unknown";
+  try {
+    version = cloudflaredVersion(binary);
+  } catch {
+    // Version is advisory; the login check below is authoritative.
+  }
+
+  const login = checkCloudflaredLogin(binary);
+  if (!login.ok) {
+    throw new Error(
+      [
+        "cloudflared is not logged in (no Cloudflare certificate found).",
+        "Run `cloudflared tunnel login` once in a browser session, then re-run `hearth tunnel setup`.",
+      ].join("\n"),
+    );
+  }
+
+  const tunnelName = (options.name ?? tunnelNameForMachine(identity.id)).toLowerCase();
+  if (!/^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$/.test(tunnelName)) {
+    throw new Error(`Invalid tunnel name ${JSON.stringify(tunnelName)}: use lowercase letters, numbers, and hyphens.`);
+  }
+
+  let hostname = options.hostname?.trim();
+  if (hostname === undefined) {
+    if (options.yes || !input.isTTY || !output.isTTY) {
+      hostname = config.tunnel.hostname ?? undefined;
+      if (!hostname) throw new Error("Non-interactive setup needs --hostname <host>.");
+    } else {
+      prompts.note(
+        "Hearth provisions a named Cloudflare Tunnel on this PC with a stable hostname. Only AI endpoints (/mcp, OAuth, discovery, health) are exposed; the dashboard stays localhost-only.",
+        "Managed tunnel",
+      );
+      hostname = await textPrompt({
+        message: config.tunnel.hostname
+          ? `Which public hostname should this PC serve? Press Enter to keep ${config.tunnel.hostname}`
+          : "Which public hostname should this PC serve?",
+        placeholder: "hearth.example.com",
+        defaultValue: config.tunnel.hostname ?? "",
+        validate: validateTunnelHostname,
+      });
+    }
+  }
+  const hostnameError = validateTunnelHostname(hostname);
+  if (hostnameError) throw new Error(hostnameError);
+  const normalizedHostname = normalizeTunnelHostname(hostname!);
+
+  const existing = listTunnels(binary)?.find((tunnel) => tunnel.name.toLowerCase() === tunnelName);
+  let tunnelId: string;
+  if (existing) {
+    const localCredsPath = tunnelPaths(config.stateDir, existing.id).credentialsPath;
+    const localCreds = (() => {
+      try {
+        const { existsSync } = require("node:fs") as typeof import("node:fs");
+        return existsSync(localCredsPath);
+      } catch {
+        return false;
+      }
+    })();
+    if (!localCreds) {
+      throw new Error(
+        [
+          `A tunnel named ${tunnelName} already exists (id ${existing.id}) without local credentials.`,
+          "Cloudflare cannot re-issue tunnel credentials, so either:",
+          `  - copy its <tunnel-id>.json to ${localCredsPath} and re-run setup,`,
+          `  - delete it (cloudflared tunnel delete ${tunnelName}) and re-run setup, or`,
+          "  - pick another name with --name.",
+        ].join("\n"),
+      );
+    }
+    tunnelId = existing.id;
+    console.log(`Reusing tunnel ${tunnelName} (${tunnelId}).`);
+  } else {
+    const created = createTunnel(binary, tunnelName);
+    tunnelId = created.tunnelId;
+    console.log(`Created tunnel ${tunnelName} (${tunnelId}).`);
+    const { existsSync } = await import("node:fs");
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
+    const fallbackSource = join(homedir(), ".cloudflared", `${tunnelId}.json`);
+    const source = created.credentialsSource && existsSync(created.credentialsSource)
+      ? created.credentialsSource
+      : fallbackSource;
+    if (!existsSync(source)) {
+      throw new Error(
+        `Tunnel created but its credentials file was not found (looked at ${source}). Copy <tunnel-id>.json next to the tunnel, then re-run setup.`,
+      );
+    }
+    installTunnelCredentials(config.stateDir, tunnelId, source);
+  }
+
+  const origin = tunnelOrigin(config.host, config.port);
+  const modelErrors = validateIngressModel({ hostname: normalizedHostname, origin });
+  if (modelErrors.length > 0) throw new Error(modelErrors.join("\n"));
+  const configFile = writeTunnelConfig(config.stateDir, tunnelId, buildIngressConfig({ hostname: normalizedHostname, origin }));
+  const renderedErrors = validateRenderedConfig(
+    (await import("node:fs")).readFileSync(configFile, "utf8"),
+    normalizedHostname,
+  );
+  if (renderedErrors.length > 0) throw new Error(renderedErrors.join("\n"));
+
+  routeTunnelDns(binary, tunnelId, normalizedHostname);
+
+  setHearthConfigValues([
+    { path: ["tunnel", "provider"], value: "cloudflared" },
+    { path: ["tunnel", "hostname"], value: normalizedHostname },
+    { path: ["tunnel", "tunnelId"], value: tunnelId },
+    { path: ["server", "publicBaseUrl"], value: `https://${normalizedHostname}` },
+    { path: ["server", "trustProxy"], value: true },
+  ]);
+
+  const lines = [
+    `Tunnel: ${tunnelName} (${tunnelId}) on ${normalizedHostname} (cloudflared ${version})`,
+    `Public MCP URL: https://${normalizedHostname}/mcp`,
+    "Exposed paths: /mcp, OAuth (/authorize, /token, /register, /revoke), discovery, health. Dashboard stays localhost-only.",
+    "server.trustProxy was enabled so rate limits see real client IPs via cf-connecting-ip.",
+  ];
+  if (options.yes || !input.isTTY || !output.isTTY) {
+    console.log(["Hearth tunnel is ready", ...lines].join("\n"));
+  } else {
+    prompts.note(lines.join("\n"), "Hearth tunnel is ready");
+    prompts.outro("Run `hearth serve` — it starts the server and the tunnel together. `hearth tunnel status` checks health.");
+  }
 }
 
 function runConfigCommand(args: string[]): void {
@@ -778,6 +1208,9 @@ async function runExpose(): Promise<void> {
     `bind: ${config.host}:${config.port}  (hearth serve)`,
     `public base url: ${config.publicBaseUrl}`,
     `public MCP URL (keep one URL per PC — reusing it elsewhere splits approvals and audit): ${new URL("/mcp", config.publicBaseUrl).toString()}`,
+    config.tunnel.provider === "cloudflared" && config.tunnel.hostname
+      ? `managed tunnel: cloudflared ${config.tunnel.hostname} (id ${config.tunnel.tunnelId ?? "unknown"}) — server, URL, and tunnel start together with \`hearth serve\``
+      : "managed tunnel: none (external reverse proxy or direct exposure; `hearth tunnel setup` provisions one)",
     `public IP seen from here: ${publicIp ?? "unknown (dig unavailable or blocked)"}`,
     `native TLS: ${!certSet ? "off (tls.certFile/tls.keyFile unset)" : certPresent ? "cert + key present" : "CONFIGURED BUT FILES MISSING"}`,
     `ACME webroot: ${config.tls.acmeDir ?? "unset"}`,
@@ -813,6 +1246,8 @@ function printHelp(): void {
       "  hearth serve           Start the server",
       "  hearth init [--force] [--yes --use chatgpt|coding-agents|both --roots <csv> --public-url <url> --providers <csv>]",
       "  hearth doctor [--fix]  Show config, runtime, and native dependency status",
+      "  hearth tunnel setup [--hostname <host>] [--name <tunnel>] [--force] [--yes]",
+      "  hearth tunnel status [--json]  Managed per-PC Cloudflare Tunnel",
       "  hearth connect [chatgpt|claude|generic]  Print copy-paste MCP connection steps for this PC",
       "  hearth config get      Print persisted config",
       "  hearth config set publicBaseUrl <url|null>  (origin only, without /mcp)",
