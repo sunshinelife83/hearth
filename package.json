@@ -42,6 +42,10 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Waishnav/hearth.git"
+  },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.1.0",
     "@anthropic-ai/claude-agent-sdk": "0.3.200",

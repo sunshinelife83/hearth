@@ -68,7 +68,7 @@ Install the Hearth CLI (works like `opencode` once installed):
 npm install -g @waishnav/hearth
 ```
 
-If the registry publish is not live yet, install from a source checkout instead:
+If you prefer building from source, install from a checkout instead:
 `./install.sh`, or `npm pack` plus
 `HEARTH_PKG=./waishnav-hearth-*.tgz ./install.sh`.
 

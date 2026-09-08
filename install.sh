@@ -1,15 +1,16 @@
 #!/bin/sh
-# Hearth installer. Works today from a source checkout; registry install
-# activates once @waishnav/hearth is published.
+# Hearth installer. Installs from the npm registry by default; builds from
+# a source checkout when run inside one.
+#
+# From the registry:
+#   ./install.sh
+#   HEARTH_PKG=@waishnav/hearth@1.0.8 ./install.sh   # pin a version
 #
 # From a checkout (this directory):
 #   ./install.sh
 #
 # From a packed tarball:
 #   HEARTH_PKG=/path/to/waishnav-hearth-1.0.8.tgz ./install.sh
-#
-# From the registry (after first publish):
-#   HEARTH_PKG=@waishnav/hearth ./install.sh
 set -eu
 
 PKG="${HEARTH_PKG:-}"
@@ -76,11 +77,9 @@ if [ -z "$PKG" ]; then
   if is_checkout; then
     install_from_checkout
   else
-    echo "error: @waishnav/hearth is not published yet." >&2
-    echo "Install from a source checkout instead:" >&2
-    echo "  git clone <your-hearth-repo-url> && cd hearth && ./install.sh" >&2
-    echo "or point HEARTH_PKG at a tarball: HEARTH_PKG=./waishnav-hearth-*.tgz ./install.sh" >&2
-    exit 1
+    echo "Installing @waishnav/hearth from the npm registry ..."
+    PKG="@waishnav/hearth"
+    install_pkg
   fi
 else
   echo "Installing $PKG ..."
