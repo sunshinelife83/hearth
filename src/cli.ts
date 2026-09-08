@@ -827,7 +827,7 @@ function printHelp(): void {
       "  hearth -v, --version   Print the installed version",
       "",
       "Examples:",
-      "  npm install -g @waishnav/hearth",
+      "  npm install -g @sunshinelife83/hearth",
       "  hearth init",
       "  hearth serve",
       "  hearth connect",

@@ -1,16 +1,28 @@
 {
-  "name": "@waishnav/hearth",
-  "version": "1.0.8",
+  "name": "@sunshinelife83/hearth",
+  "version": "1.0.0",
   "description": "Expose a secure local coding workspace through an MCP server.",
+  "keywords": [],
+  "homepage": "https://github.com/Waishnav/hearth#readme",
+  "bugs": {
+    "url": "https://github.com/Waishnav/hearth/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Waishnav/hearth.git"
+  },
+  "license": "MIT",
+  "author": "Mounib Bouchareb <mounib.bouchareb16@gmail.com>",
   "type": "module",
   "main": "dist/server.js",
-  "engines": {
-    "node": ">=22.19 <27"
-  },
-  "packageManager": "pnpm@11.25.0",
   "bin": {
     "hearth": "bin/hearth.js",
     "hearth-agentd": "bin/hearth-agentd.js"
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "test"
   },
   "files": [
     "bin",
@@ -22,9 +34,6 @@
     "skills",
     "README.md"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "pnpm clean && pnpm build:app && pnpm build:dashboard && tsc -p tsconfig.build.json",
@@ -38,13 +47,6 @@
     "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
     "test:package-install": "tsx --test --test-concurrency=1 \"test/package-install-smoke.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Waishnav/hearth.git"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.1.0",
@@ -84,12 +86,19 @@
     "typescript": "^6.0.3",
     "vite": "^8.0.14"
   },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=22.19 <27"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "overrides": {
     "protobufjs": "7.6.4",
     "ws": "8.21.0",
     "undici": "8.5.0"
   },
-  "optionalDependencies": {
-    "node-pty": "^1.1.0"
-  }
+  "packageManager": "pnpm@11.25.0"
 }
