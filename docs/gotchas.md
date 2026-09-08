@@ -7,8 +7,8 @@ This page collects the setup issues users are most likely to hit.
 Use `npx`:
 
 ```bash
-npx @sunshinelife83/hearth init
-npx @sunshinelife83/hearth serve
+npx @sunshinelive83/hearth init
+npx @sunshinelive83/hearth serve
 ```
 
 If you installed globally, confirm npm's global bin directory is on `PATH`.
@@ -40,7 +40,7 @@ npm rebuild better-sqlite3
 Then run:
 
 ```bash
-npx @sunshinelife83/hearth doctor
+npx @sunshinelive83/hearth doctor
 ```
 
 Release starts run a native dependency check before launching.
@@ -62,7 +62,7 @@ https://your-tunnel-host.example.com/mcp
 If you saved the wrong value:
 
 ```bash
-npx @sunshinelife83/hearth config set publicBaseUrl https://your-tunnel-host.example.com
+npx @sunshinelive83/hearth config set publicBaseUrl https://your-tunnel-host.example.com
 ```
 
 ## Reverse Proxy `/mcp` Returns 404
@@ -80,13 +80,13 @@ Temporary tunnels often change URLs between runs.
 Update the configured URL:
 
 ```bash
-npx @sunshinelife83/hearth config set publicBaseUrl https://new-tunnel.example.com
+npx @sunshinelive83/hearth config set publicBaseUrl https://new-tunnel.example.com
 ```
 
 For a stable URL:
 
 ```bash
-npx @sunshinelife83/hearth config set publicBaseUrl https://hearth.example.com
+npx @sunshinelive83/hearth config set publicBaseUrl https://hearth.example.com
 ```
 
 ## Host Header Or 403 Problems
@@ -96,7 +96,7 @@ Hearth derives allowed hosts from the configured public URL.
 Run:
 
 ```bash
-npx @sunshinelife83/hearth doctor
+npx @sunshinelive83/hearth doctor
 ```
 
 Confirm the public URL hostname appears in allowed hosts. If you changed tunnel
@@ -132,7 +132,7 @@ Make sure you are entering the Owner password from:
 To regenerate setup:
 
 ```bash
-npx @sunshinelife83/hearth init --force
+npx @sunshinelive83/hearth init --force
   (`--force` now rotates the Owner password and prints the new value in ChatGPT setups; existing access tokens stay valid until they expire — revoke them via the OAuth revocation endpoint if needed)
 ```
 
@@ -169,13 +169,13 @@ the current local project and are not gated by MCP allowed roots.
 Run:
 
 ```bash
-npx @sunshinelife83/hearth config get
+npx @sunshinelive83/hearth config get
 ```
 
 Then either open a project under an allowed root or rerun setup:
 
 ```bash
-npx @sunshinelife83/hearth init --force
+npx @sunshinelive83/hearth init --force
 ```
 
 ## Worktree Mode Fails
@@ -203,7 +203,7 @@ Install Git for Windows and use Git Bash, or use WSL, MSYS2, or Cygwin Bash.
 Run:
 
 ```bash
-npx @sunshinelife83/hearth doctor
+npx @sunshinelive83/hearth doctor
 ```
 
 Confirm Bash is detected.
