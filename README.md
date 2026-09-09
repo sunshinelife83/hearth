@@ -1,6 +1,6 @@
 <p align="center">
   <picture>
-    <img src="https://raw.githubusercontent.com/sunshinelife83/hearth/main/docs/assets/hearth-logo-light.png" alt="Hearth logo" width="140">
+    <img src="https://raw.githubusercontent.com/sunshinelife83/hearth/main/docs/assets/hearth-logo-light.svg" alt="Hearth logo" width="140">
   </picture>
 </p>
 
