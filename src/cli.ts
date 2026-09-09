@@ -876,23 +876,8 @@ async function runNgrokSetup(args: string[]): Promise<void> {
   }
   const config = loadConfig();
 
-  const binary = findNgrok();
-  if (!binary) throw new Error(ngrokInstallHint());
-  try {
-    ngrokVersion(binary);
-  } catch {
-    // Version is advisory; the auth check below is authoritative.
-  }
-  const auth = checkNgrokAuth(binary);
-  if (!auth.ok) {
-    throw new Error(
-      [
-        "ngrok has no authtoken configured.",
-        "Run `ngrok config add-authtoken <your-token>` once (token from https://dashboard.ngrok.com/get-started/your-authtoken), then re-run `hearth ngrok setup`.",
-      ].join("\n"),
-    );
-  }
-
+  // Validate the domain before touching the binary: bad input fails fast on
+  // every platform, including ones where no ngrok binary can run here.
   let domain = options.domain?.trim();
   if (domain === undefined) {
     if (options.yes || !input.isTTY || !output.isTTY) {
@@ -916,6 +901,23 @@ async function runNgrokSetup(args: string[]): Promise<void> {
   const domainError = validateNgrokDomain(domain);
   if (domainError) throw new Error(domainError);
   const normalizedDomain = normalizeNgrokDomain(domain!);
+
+  const binary = findNgrok();
+  if (!binary) throw new Error(ngrokInstallHint());
+  try {
+    ngrokVersion(binary);
+  } catch {
+    // Version is advisory; the auth check below is authoritative.
+  }
+  const auth = checkNgrokAuth(binary);
+  if (!auth.ok) {
+    throw new Error(
+      [
+        "ngrok has no authtoken configured.",
+        "Run `ngrok config add-authtoken <your-token>` once (token from https://dashboard.ngrok.com/get-started/your-authtoken), then re-run `hearth ngrok setup`.",
+      ].join("\n"),
+    );
+  }
 
   setHearthConfigValues([
     { path: ["tunnel", "provider"], value: "ngrok" },

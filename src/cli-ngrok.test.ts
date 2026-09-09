@@ -65,6 +65,13 @@ describe("hearth ngrok commands (stubbed ngrok)", () => {
     throw new Error("unreachable");
   };
 
+  // The sh stub below cannot execute on Windows (no shebang support, and
+  // findNgrok looks for ngrok.exe). These paths are covered on Windows by
+  // the tunnel-ngrok unit tests; the repo precedent is machine-id.test.ts.
+  const needsExecutableStub: { skip?: string } = process.platform === "win32"
+    ? { skip: "shell-script stub is not executable on Windows" }
+    : {};
+
   it("status reports no managed tunnel before setup", () => {
     const output = runCli({}, "ngrok", "status");
     assert.match(output, /No managed ngrok tunnel/);
@@ -80,7 +87,7 @@ describe("hearth ngrok commands (stubbed ngrok)", () => {
     assert.match(output, /ngrok was not found/);
   });
 
-  it("setup fails without an authtoken", () => {
+  it("setup fails without an authtoken", needsExecutableStub, () => {
     const output = runCliError(
       { STUB_AUTH: "fail" },
       "ngrok", "setup", "--domain", "abc.ngrok-free.dev", "--yes",
@@ -88,7 +95,7 @@ describe("hearth ngrok commands (stubbed ngrok)", () => {
     assert.match(output, /add-authtoken/);
   });
 
-  it("setup saves the domain and syncs publicBaseUrl plus trustProxy", () => {
+  it("setup saves the domain and syncs publicBaseUrl plus trustProxy", needsExecutableStub, () => {
     const output = runCli({}, "ngrok", "setup", "--domain", "https://abc.ngrok-free.dev/", "--yes");
     assert.match(output, /Hearth ngrok is ready/);
     assert.match(output, /https:\/\/abc\.ngrok-free\.dev\/mcp/);
