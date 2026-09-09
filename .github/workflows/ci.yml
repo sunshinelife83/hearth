@@ -61,19 +61,19 @@ jobs:
       - name: Test (config)
         run: pnpm test:ci-config
 
-      - name: Test (server: core)
+      - name: Test (server core)
         run: pnpm test:ci-server-server
 
-      - name: Test (server: modern)
+      - name: Test (server modern)
         run: pnpm test:ci-server-modern
 
-      - name: Test (server: stdio)
+      - name: Test (server stdio)
         run: pnpm test:ci-server-stdio
 
-      - name: Test (server: shutdown)
+      - name: Test (server shutdown)
         run: pnpm test:ci-server-shutdown
 
-      - name: Test (server: dashboard)
+      - name: Test (server dashboard)
         run: pnpm test:ci-server-dashboard
 
       - name: Test (cli)
