@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { DeviceTokenStore } from "./device-tokens.js";
 import { SingleUserOAuthProvider } from "./oauth-provider.js";
+import { rmFixtureDir } from "./test-support/fs.js";
 
 describe("device tokens", () => {
   let root = "";
@@ -28,8 +29,15 @@ describe("device tokens", () => {
   });
 
   after(async () => {
-    provider.close();
-    await rm(root, { recursive: true, force: true });
+    // Windows holds OS locks on open SQLite files: every handle on the
+    // fixture state dir must close before rm, or cleanup fails with EBUSY.
+    // The provider owns two handles and the test owns a third (store).
+    try {
+      provider.close();
+    } finally {
+      store.close();
+    }
+    await rmFixtureDir(root);
   });
 
   it("creates a token once, verifies it through the OAuth provider, and records usage", async () => {

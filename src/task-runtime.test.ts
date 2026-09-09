@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -8,6 +8,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { loadConfig } from "./config.js";
 import { buildLocalMcpServer } from "./stdio-server.js";
 import { writeTestHearthConfig } from "./test-support/config.test.js";
+import { rmFixtureDir } from "./test-support/fs.js";
 import { TaskStore, TaskTransitionError } from "./task-store.js";
 import { detectVerificationGates } from "./verification.js";
 
@@ -26,6 +27,12 @@ describe("task runtime (state machine + verification gates)", () => {
       scripts: { test: "node gate.js" },
     }));
     await writeFile(join(workspaceRoot, "gate.js"), "process.exit(Number(process.env.GATE_FAIL ?? 0))");
+    // File-based failing gate instead of `node -e "..."`: cmd.exe mangles
+    // inline-quote handling (Node's spawn quotes the whole command for
+    // `cmd /d /s /c`, so `node -e "process.exit(3)"` arrives with literal
+    // backslashes and evaluates a string literal, exiting 0 on Windows).
+    // A script file has no shell metacharacters and works on every platform.
+    await writeFile(join(workspaceRoot, "fail.js"), "process.exit(3)\n");
 
     const env = writeTestHearthConfig(join(root, "config"), {
       server: { host: "127.0.0.1", port: 7176, publicBaseUrl: null },
@@ -47,9 +54,12 @@ describe("task runtime (state machine + verification gates)", () => {
   });
 
   after(async () => {
-    await client.close();
-    await closeServer();
-    await rm(root, { recursive: true, force: true });
+    try {
+      await client.close();
+    } finally {
+      await closeServer();
+    }
+    await rmFixtureDir(root);
   });
 
   async function openWorkspace(): Promise<string> {
@@ -103,12 +113,10 @@ describe("task runtime (state machine + verification gates)", () => {
     const taskId = created.taskId as string;
     await call("task_plan", { taskId, steps: ["break things"] });
 
-    // Make the gate fail for this run. Use double quotes: cmd.exe does not
-    // treat single quotes as quoting, so `node -e '...'` would evaluate a
-    // string literal and exit 0 on Windows instead of failing.
+    // File-based gate: `node -e "..."` exits 0 on Windows (see before hook).
     const failing = await call("task_verify", {
       taskId,
-      gates: [{ name: "failing", command: 'node -e "process.exit(3)"' }],
+      gates: [{ name: "failing", command: "node fail.js" }],
     });
     const failedRecord = asRecord(failing.structuredContent);
     assert.equal(failedRecord.status, "repairing");
@@ -189,7 +197,7 @@ describe("task runtime (state machine + verification gates)", () => {
     for (let round = 1; round <= 6; round += 1) {
       const result = asRecord((await call("task_verify", {
         taskId,
-        gates: [{ name: "failing", command: 'node -e "process.exit(3)"' }],
+        gates: [{ name: "failing", command: "node fail.js" }],
       })).structuredContent);
       if (round <= 5) {
         assert.equal(result.status, "repairing", `round ${round} repairs`);

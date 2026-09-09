@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -8,6 +8,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { loadConfig } from "./config.js";
 import { buildLocalMcpServer } from "./stdio-server.js";
 import { writeTestHearthConfig } from "./test-support/config.test.js";
+import { rmFixtureDir } from "./test-support/fs.js";
 import { TaskStore } from "./task-store.js";
 import { linkAgentToTask, stallAdvisory } from "./agent-tools.js";
 import { normalizeTimeoutMs, DEFAULT_AGENT_TURN_TIMEOUT_MS } from "./local-agent-manager.js";
@@ -43,9 +44,15 @@ describe("agent → task ownership linkage", () => {
   });
 
   after(async () => {
-    await client.close();
-    await closeServer();
-    await rm(root, { recursive: true, force: true });
+    // Close in finally so a client close failure cannot leak the server's
+    // SQLite handles into rm (EBUSY on Windows). The OS can also hold the
+    // lock briefly after close, so rm retries with backoff.
+    try {
+      await client.close();
+    } finally {
+      await closeServer();
+    }
+    await rmFixtureDir(root);
   });
 
   it("linkAgentToTask records ownership and rejects unknown tasks", () => {    const store = new TaskStore(join(root, "state"));
@@ -145,9 +152,12 @@ describe("delegation scopes and pre-delegation snapshots", () => {
   });
 
   after(async () => {
-    await client.close();
-    await closeServer();
-    await rm(root, { recursive: true, force: true });
+    try {
+      await client.close();
+    } finally {
+      await closeServer();
+    }
+    await rmFixtureDir(root);
   });
 
   const textOf = (result: unknown) =>

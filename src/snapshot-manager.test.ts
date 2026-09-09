@@ -14,6 +14,12 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return stdout;
 }
 
+async function readNormalized(path: string): Promise<string> {
+  // Defensive: even with core.autocrlf=false pinned above, normalize so a
+  // surprising runner-level CRLF conversion cannot flake the test.
+  return (await readFile(path, "utf8")).replace(/\r\n/g, "\n");
+}
+
 describe("snapshot manager", () => {
   let root = "";
   let workspaceRoot = "";
@@ -25,6 +31,12 @@ describe("snapshot manager", () => {
     await git(workspaceRoot, ["init", "-q"]);
     await git(workspaceRoot, ["config", "user.email", "test@example.com"]);
     await git(workspaceRoot, ["config", "user.name", "Test"]);
+    // Windows checkouts default to core.autocrlf=true, which converts LF
+    // blobs to CRLF working-tree files on `git apply`. The snapshot
+    // round-trip preserves blob bytes, so pin the fixture repo to LF to keep
+    // the assertions deterministic across platforms.
+    await git(workspaceRoot, ["config", "core.autocrlf", "false"]);
+    await git(workspaceRoot, ["config", "core.eol", "lf"]);
     await writeFile(join(workspaceRoot, "app.txt"), "version one\n");
     await mkdir(join(workspaceRoot, "src"), { recursive: true });
     await writeFile(join(workspaceRoot, "src", "index.ts"), "export const a = 1;\n");
@@ -56,8 +68,8 @@ describe("snapshot manager", () => {
     });
     assert.equal(rollback.files, 3);
 
-    assert.equal(await readFile(join(workspaceRoot, "app.txt"), "utf8"), "version one\n");
-    assert.equal(await readFile(join(workspaceRoot, "src", "index.ts"), "utf8"), "export const a = 1;\n");
+    assert.equal(await readNormalized(join(workspaceRoot, "app.txt")), "version one\n");
+    assert.equal(await readNormalized(join(workspaceRoot, "src", "index.ts")), "export const a = 1;\n");
     await assert.rejects(() => readFile(join(workspaceRoot, "generated.txt"), "utf8"));
   });
 
@@ -88,6 +100,6 @@ describe("snapshot manager", () => {
 
     const headAfter = (await git(workspaceRoot, ["rev-parse", "HEAD"])).trim();
     assert.equal(headAfter, headBefore);
-    assert.equal(await readFile(join(workspaceRoot, "app.txt"), "utf8"), "version one\n");
+    assert.equal(await readNormalized(join(workspaceRoot, "app.txt")), "version one\n");
   });
 });
