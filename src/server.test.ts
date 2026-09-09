@@ -599,6 +599,7 @@ async function fixture(
   );
   const store = new SqliteWorkspaceStore(stateDir);
   const workspaces = new WorkspaceRegistry(config, store);
+  const taskStore = new TaskStore(stateDir);
   const server = createMcpServer(
     config,
     workspaces,
@@ -607,7 +608,7 @@ async function fixture(
     resolveLocalAgentProviders,
     [],
     undefined,
-    new TaskStore(stateDir),
+    taskStore,
   );
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "hearth-test-client", version: "1.0.0" });
@@ -623,6 +624,9 @@ async function fixture(
     await client.close();
     await server.close();
     store.close();
+    // Windows holds OS locks on open SQLite files: the store must close
+    // before t.after removes the fixture dir, or cleanup fails with EPERM.
+    taskStore.close();
   };
 
   t.after(async () => {
