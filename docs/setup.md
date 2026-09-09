@@ -64,7 +64,7 @@ These choices are stored as provider objects under `subagents` in
 If you selected Coding Agents, setup prints:
 
 ```bash
-npx skills add Waishnav/hearth --skill subagents --global
+npx skills add sunshinelife83/hearth --skill subagents --global
 ```
 
 The Skills CLI asks which installed Coding Agents should receive the skill.

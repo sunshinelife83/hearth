@@ -4,7 +4,7 @@ import { fleetConfigSchema } from "./orchestration/lanes.js";
 
 export const HEARTH_CONFIG_VERSION = 1 as const;
 export const HEARTH_CONFIG_SCHEMA_URL =
-  "https://raw.githubusercontent.com/Waishnav/hearth/main/schema/v1/hearth.schema.json";
+  "https://raw.githubusercontent.com/sunshinelife83/hearth/main/schema/v1/hearth.schema.json";
 
 const serverConfigSchema = z.object({
   host: z.string().trim().min(1).default("127.0.0.1"),

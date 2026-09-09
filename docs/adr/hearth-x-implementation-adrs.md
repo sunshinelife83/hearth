@@ -156,7 +156,7 @@
   - الاسم الجديد Hearth في كل سطح هوية: ثنائيات `hearth`/`hearth-agentd`، حزمة النشر، `~/.hearth`، متغيرات `HEARTH_*`، المنفذ 7176، `hearth.sqlite`، `refs/hearth/`، نطاق OAuth‏ `hearth`.
   - لا يوجد تبنٍّ لإعدادات سابقة: التثبيت الجديد يبدأ من `hearth init`.
   - تعرض مباشر اختياري بلا relay: قسم `tls` (certFile/keyFile/acmeDir)، إنهاء HTTPS داخل `serve`، ومسار `/.well-known/acme-challenge/` لوضع certbot webroot. هوية ثابتة لكل PC (`hearth id`, ملف `machine.json` بوضع 0600) + أمر `hearth expose` التشخيصي الصادق: عنوان عام + حالة TLS + خطوات تالية مخصصة، مع التصريح الصريح بأن URL عام يتطلب مسار inbound ونطاقًا — لا سحر هنا.
-- **Consequences:** أي منح OAuth صادرة عن نطاقات سابقة تحتاج إعادة موافقة. روابط schema تشير إلى مستودع `Waishnav/hearth` (إعادة تسمية المستودع على GitHub خطوة يدوية لاحقة). النشر الأول على npm (`install.sh` يعمل من checkout حتى ذلك الحين).
+- **Consequences:** أي منح OAuth صادرة عن نطاقات سابقة تحتاج إعادة موافقة. روابط schema تشير إلى مستودع `sunshinelife83/hearth`. النشر الأول على npm (`install.sh` يعمل من checkout حتى ذلك الحين).
 
 ## ADR-031: النفق حصريًا عبر ngrok — إسقاط Cloudflare والتعرض المباشر
 - **Status:** accepted (2026-09-09 — supersedes the tunnel/direct-exposure parts of ADR-030)

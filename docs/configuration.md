@@ -19,7 +19,7 @@ Run `hearth init` to create both files. `hearth config set publicBaseUrl
 
 ```jsonc
 {
-  "$schema": "https://raw.githubusercontent.com/Waishnav/hearth/main/schema/v1/hearth.schema.json",
+  "$schema": "https://raw.githubusercontent.com/sunshinelife83/hearth/main/schema/v1/hearth.schema.json",
   "configVersion": 1,
 
   "server": {

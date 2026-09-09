@@ -1,6 +1,6 @@
 <p align="center">
   <picture>
-    <img src="https://raw.githubusercontent.com/Waishnav/hearth/main/docs/assets/hearth-logo-light.png" alt="Hearth logo" width="140">
+    <img src="https://raw.githubusercontent.com/sunshinelife83/hearth/main/docs/assets/hearth-logo-light.png" alt="Hearth logo" width="140">
   </picture>
 </p>
 
@@ -10,53 +10,17 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@sunshinelife83/hearth"><img alt="npm" src="https://img.shields.io/npm/v/%40sunshinelife83%2Fhearth?style=flat-square" /></a>
-  <a href="https://github.com/Waishnav/hearth/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Waishnav/hearth/ci.yml?style=flat-square&branch=main" /></a>
-  <a href="https://github.com/Waishnav/hearth/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/npm/l/%40sunshinelife83%2Fhearth?style=flat-square" /></a>
+  <a href="https://github.com/sunshinelife83/hearth/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/sunshinelife83/hearth/ci.yml?style=flat-square&branch=main" /></a>
+  <a href="https://github.com/sunshinelife83/hearth/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/npm/l/%40sunshinelife83%2Fhearth?style=flat-square" /></a>
 </p>
 
-[![Hearth connected to ChatGPT](https://raw.githubusercontent.com/Waishnav/hearth/main/docs/assets/hearth-screenshot.png)](https://raw.githubusercontent.com/Waishnav/hearth/main/docs/assets/hearth-screenshot.png)
+[![Hearth connected to ChatGPT](https://raw.githubusercontent.com/sunshinelife83/hearth/main/docs/assets/hearth-screenshot.png)](https://raw.githubusercontent.com/sunshinelife83/hearth/main/docs/assets/hearth-screenshot.png)
 
 **Give ChatGPT a secure connection to your own machine and Turn ChatGPT into Codex**
 
 Hearth is a self-hosted MCP server that lets ChatGPT read, edit, search, and run code in your real local projects — your files, your tools, your terminal — without uploading anything to a third party. You run it on your machine, expose it through its own managed tunnel, and approve the connection with a password only you have.
 
 The same `/mcp` endpoint serves the 2026-07-28 per-request protocol and automatically supports older 2025-era clients through stateless compatibility handling. There is no protocol mode to configure.
-
-## Sponsors and Special Thanks
-<!-- 
-
-<table>
-  <thead>
-    <tr>
-      <th>Sponsor</th>
-      <th>About</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td align="center" width="220">
-        <a href="https://rebates.ai/">
-          <img
-            src="https://app.rebates.ai/brand/rebates-lockup.svg"
-            alt="Rebates"
-            width="170"
-          >
-        </a>
-      </td>
-      <td>
-        <strong>The ads in your terminal pay you.</strong><br><br>
-        <a href="https://rebates.ai/">Rebates</a> adds one optional
-        sponsored footer to your coding agent and pays you cash back for every
-        session in which it is shown. Turn it off at any time.
-      </td>
-    </tr>
-  </tbody>
-</table>
--->
-<p>
-  Hearth is open to new sponsors.
-  <a href="https://x.com/wshxnv">Get in touch to become one.</a>
-</p>
 
 ## Installation
 
@@ -246,12 +210,12 @@ hearth doctor
 
 ## Documentation
 
-- [Setup Guide](https://github.com/Waishnav/hearth/blob/main/docs/setup.md)
-- [ChatGPT Coding Workflow](https://github.com/Waishnav/hearth/blob/main/docs/chatgpt-coding-workflow.md)
-- [Configuration Reference](https://github.com/Waishnav/hearth/blob/main/docs/configuration.md)
-- [Native File Download](https://github.com/Waishnav/hearth/blob/main/docs/artifact-exchange.md)
-- [Security Model](https://github.com/Waishnav/hearth/blob/main/docs/security.md)
-- [Troubleshooting Gotchas](https://github.com/Waishnav/hearth/blob/main/docs/gotchas.md)
+- [Setup Guide](https://github.com/sunshinelife83/hearth/blob/main/docs/setup.md)
+- [ChatGPT Coding Workflow](https://github.com/sunshinelife83/hearth/blob/main/docs/chatgpt-coding-workflow.md)
+- [Configuration Reference](https://github.com/sunshinelife83/hearth/blob/main/docs/configuration.md)
+- [Native File Download](https://github.com/sunshinelife83/hearth/blob/main/docs/artifact-exchange.md)
+- [Security Model](https://github.com/sunshinelife83/hearth/blob/main/docs/security.md)
+- [Troubleshooting Gotchas](https://github.com/sunshinelife83/hearth/blob/main/docs/gotchas.md)
 
 ## Philosophy
 

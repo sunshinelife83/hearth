@@ -285,7 +285,7 @@ For a Coding Agent, run the installation command printed by
 `hearth init`:
 
 ```bash
-npx skills add Waishnav/hearth --skill subagents --global
+npx skills add sunshinelife83/hearth --skill subagents --global
 ```
 
 The Skills CLI handles agent discovery and installation. Hearth setup does

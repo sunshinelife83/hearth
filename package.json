@@ -3,13 +3,13 @@
   "version": "1.2.0",
   "description": "Expose a secure local coding workspace through an MCP server.",
   "keywords": [],
-  "homepage": "https://github.com/Waishnav/hearth#readme",
+  "homepage": "https://github.com/sunshinelife83/hearth#readme",
   "bugs": {
-    "url": "https://github.com/Waishnav/hearth/issues"
+    "url": "https://github.com/sunshinelife83/hearth/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Waishnav/hearth.git"
+    "url": "git+https://github.com/sunshinelife83/hearth.git"
   },
   "license": "MIT",
   "author": "Mounib Bouchareb <mounib.bouchareb16@gmail.com>",

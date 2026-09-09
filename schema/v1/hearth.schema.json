@@ -1,12 +1,12 @@
 {
-  "$id": "https://raw.githubusercontent.com/Waishnav/hearth/main/schema/v1/hearth.schema.json",
+  "$id": "https://raw.githubusercontent.com/sunshinelife83/hearth/main/schema/v1/hearth.schema.json",
   "title": "Hearth configuration",
   "description": "Versioned configuration for a local Hearth MCP server.",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
     "$schema": {
-      "default": "https://raw.githubusercontent.com/Waishnav/hearth/main/schema/v1/hearth.schema.json",
+      "default": "https://raw.githubusercontent.com/sunshinelife83/hearth/main/schema/v1/hearth.schema.json",
       "type": "string",
       "format": "uri"
     },
