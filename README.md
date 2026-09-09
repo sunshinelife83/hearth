@@ -278,43 +278,19 @@ self-contained product: one command to install, one command to serve, managed
 tunneling per PC, and first-class support for ChatGPT, Claude, and any
 MCP-compatible host.
 
-## Built by Waishnav
+Its orchestration layer — self-contained task briefs, fleet lanes with
+audited approvals, per-turn watchdogs, and pre-delegation snapshots — takes
+design inspiration from
+[delegate-skills](https://github.com/amElnagdy/delegate-skills) by amElnagdy
+(a design reference for the coordination patterns, not a code dependency:
+Hearth's orchestration is implemented natively in `src/orchestration/`).
 
-I'm Waishnav. I like building opinionated products and tools, and Artifacts is one example.
+## Built by Mounib Bouchareb
 
-This year, I began my journey to build a one-person, multi-agent company capable of generating millions in revenue. If you want to follow the failures, wins, lessons, and everything in between, come hang out with me on [X](https://x.com/wshxnv).
-
-
-## More from me
-
-<table>
-  <thead>
-    <tr>
-      <th>Project</th>
-      <th>About</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td align="center" width="220">
-        <a href="https://gitcms.dev/">
-          <img
-            src="https://gitcms.dev/brand/gitcms-logo.svg"
-            alt="GitCMS"
-            width="48"
-          /><br />
-          <strong>GitCMS</strong>
-        </a>
-      </td>
-      <td>
-        <strong>Modern CMS and tooling for markdown based content sites — built for agents and humans.</strong><br><br>
-        Visual editing, editorial workflow, and ChatGPT/Claude content agents, with
-        every post and page stored as files in your repo.
-        <a href="https://gitcms.dev/">Learn more</a>.
-      </td>
-    </tr>
-  </tbody>
-</table>
+Hearth is built and maintained by [Mounib Bouchareb](https://github.com/sunshinelife83)
+([@sunshinelife83](https://github.com/sunshinelife83) on GitHub) — opinionated
+local-first tooling for the agentic era: your machine, your projects, your
+models, no middlemen.
 
 ## Local Development
 
