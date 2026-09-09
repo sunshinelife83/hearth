@@ -4,13 +4,13 @@
 #
 # From the registry:
 #   ./install.sh
-#   HEARTH_PKG=@sunshinelife83/hearth@1.1.0 ./install.sh   # pin a version
+#   HEARTH_PKG=@sunshinelife83/hearth@1.2.0 ./install.sh   # pin a version
 #
 # From a checkout (this directory):
 #   ./install.sh
 #
 # From a packed tarball:
-#   HEARTH_PKG=/path/to/sunshinelife83-hearth-1.1.0.tgz ./install.sh
+#   HEARTH_PKG=/path/to/sunshinelife83-hearth-1.2.0.tgz ./install.sh
 set -eu
 
 PKG="${HEARTH_PKG:-}"
