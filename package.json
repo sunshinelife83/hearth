@@ -45,6 +45,13 @@
     "schema:config": "tsx scripts/generate-config-schema.ts",
     "start": "node dist/cli.js serve",
     "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
+    "test:ci-tunnel": "tsx --test --test-concurrency=1 \"src/tunnel-ngrok.test.ts\" \"src/cli-ngrok.test.ts\" \"src/tunnel-host-gate.test.ts\" \"src/cli-id.test.ts\" \"src/host-compat.test.ts\"",
+    "test:ci-config": "tsx --test --test-concurrency=1 \"src/config.test.ts\" \"src/config-schema.test.ts\" \"src/user-config.test.ts\" \"src/test-support/config.test.ts\" \"src/machine-id.test.ts\" \"src/onboarding.test.ts\" \"src/cli-workspace.test.ts\" \"src/request-meta.test.ts\" \"src/process-platform.test.ts\" \"src/roots.test.ts\"",
+    "test:ci-server": "tsx --test --test-concurrency=1 \"src/server.test.ts\" \"src/mcp-modern-server.test.ts\" \"src/stdio-server.test.ts\" \"src/server-shutdown.test.ts\" \"src/dashboard.test.ts\"",
+    "test:ci-cli": "tsx --test --test-concurrency=1 \"src/cli.test.ts\" \"src/cli-show-changes.test.ts\" \"src/bin-launcher.test.ts\"",
+    "test:ci-state": "tsx --test --test-concurrency=1 \"src/oauth-store.test.ts\" \"src/device-tokens.test.ts\" \"src/task-runtime.test.ts\" \"src/agent-task-link.test.ts\" \"src/workspace-conversation.test.ts\" \"src/workspaces.test.ts\" \"src/review-checkpoints.test.ts\" \"src/snapshot-manager.test.ts\" \"src/skills.test.ts\" \"src/apply-patch.test.ts\" \"src/artifact-download.test.ts\" \"src/incoming-artifacts.test.ts\"",
+    "test:ci-policy": "tsx --test --test-concurrency=1 \"src/policy/command-policy.test.ts\" \"src/policy/env-allowlist.test.ts\" \"src/policy/sandbox.test.ts\" \"src/policy/shell-gate.test.ts\" \"src/policy/workspace-profiles.test.ts\" \"src/process-sessions.test.ts\" \"src/process-journal.test.ts\"",
+    "test:ci-agents": "tsx --test --test-concurrency=1 \"src/local-agent-*.test.ts\" \"src/orchestration/*.test.ts\" \"src/context/*.test.ts\" \"src/ui/*.test.ts\"",
     "test:package-install": "tsx --test --test-concurrency=1 \"test/package-install-smoke.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

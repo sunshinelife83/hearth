@@ -58,7 +58,14 @@ jobs:
       - name: Test
         env:
           HEARTH_REQUIRE_PI_SANDBOX: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
-        run: pnpm test
+        run: |
+          pnpm test:ci-tunnel
+          pnpm test:ci-config
+          pnpm test:ci-server
+          pnpm test:ci-cli
+          pnpm test:ci-state
+          pnpm test:ci-policy
+          pnpm test:ci-agents
 
       - name: Build
         run: pnpm build
