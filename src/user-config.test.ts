@@ -134,32 +134,6 @@ withConfigDir((configDir, env) => {
 
 console.log("user config tests passed");
 
-{
-  // One-time adoption of a pre-rename ~/.devspace install.
-  const sandbox = mkdtempSync(join(tmpdir(), "hearth-legacy-adopt-test-"));
-  const savedHome = process.env.HOME;
-  try {
-    const legacyDir = join(sandbox, "legacy", ".devspace");
-    mkdirSync(legacyDir, { recursive: true });
-    writeFileSync(join(legacyDir, "config.jsonc"), JSON.stringify({ configVersion: 1, server: { port: 8787 } }));
-    writeFileSync(join(legacyDir, "auth.json"), JSON.stringify({ ownerToken: "legacy-token-long-enough" }));
-    process.env.HOME = join(sandbox, "home");
-    const fresh = loadHearthFiles({ HEARTH_LEGACY_DEVSPACE_DIR: legacyDir });
-    assert.equal(fresh.migratedFromDevspace, true);
-    assert.equal(fresh.config.server.port, 8787);
-    assert.equal(fresh.auth.ownerToken, "legacy-token-long-enough");
-    assert.equal(existsSync(join(legacyDir, "config.jsonc")), true, "originals kept");
-    const second = loadHearthFiles({ HEARTH_LEGACY_DEVSPACE_DIR: legacyDir });
-    assert.equal(second.migratedFromDevspace, false, "adoption runs once");
-  } finally {
-    if (savedHome === undefined) delete process.env.HOME;
-    else process.env.HOME = savedHome;
-    rmSync(sandbox, { recursive: true, force: true });
-  }
-}
-
-console.log("legacy adoption tests passed");
-
 function withConfigDir(
   test: (configDir: string, env: NodeJS.ProcessEnv) => void,
 ): void {

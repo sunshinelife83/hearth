@@ -9,16 +9,16 @@
 <p align="center">Bring a Codex-style coding workflow to ChatGPT.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@sunshinelife83/hearth"><img alt="npm" src="https://img.shields.io/npm/v/%40waishnav%2Fhearth?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@sunshinelife83/hearth"><img alt="npm" src="https://img.shields.io/npm/v/%40sunshinelife83%2Fhearth?style=flat-square" /></a>
   <a href="https://github.com/Waishnav/hearth/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Waishnav/hearth/ci.yml?style=flat-square&branch=main" /></a>
-  <a href="https://github.com/Waishnav/hearth/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/npm/l/%40waishnav%2Fhearth?style=flat-square" /></a>
+  <a href="https://github.com/Waishnav/hearth/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/npm/l/%40sunshinelife83%2Fhearth?style=flat-square" /></a>
 </p>
 
 [![Hearth connected to ChatGPT](https://raw.githubusercontent.com/Waishnav/hearth/main/docs/assets/hearth-screenshot.png)](https://raw.githubusercontent.com/Waishnav/hearth/main/docs/assets/hearth-screenshot.png)
 
 **Give ChatGPT a secure connection to your own machine and Turn ChatGPT into Codex**
 
-Hearth is a self-hosted MCP server that lets ChatGPT read, edit, search, and run code in your real local projects — your files, your tools, your terminal — without uploading anything to a third party. You run it on your machine, expose it through a tunnel you control, and approve the connection with a password only you have.
+Hearth is a self-hosted MCP server that lets ChatGPT read, edit, search, and run code in your real local projects — your files, your tools, your terminal — without uploading anything to a third party. You run it on your machine, expose it through its own managed tunnel, and approve the connection with a password only you have.
 
 The same `/mcp` endpoint serves the 2026-07-28 per-request protocol and automatically supports older 2025-era clients through stateless compatibility handling. There is no protocol mode to configure.
 
@@ -267,6 +267,16 @@ We are not there yet.
 Hearth is one attempt to fast-forward that future: a way for MCP-capable
 hosts like ChatGPT and Claude to work directly with local project files through
 explicit, inspectable tools.
+
+## Origin
+
+Hearth is built on **DevSpace** — the local development execution layer it
+grew out of. The workspace model (one directory plus its accumulated
+instructions), the MCP tool surface, and the explicit-lifecycle philosophy
+come straight from that foundation. Hearth carries them forward as a
+self-contained product: one command to install, one command to serve, managed
+tunneling per PC, and first-class support for ChatGPT, Claude, and any
+MCP-compatible host.
 
 ## Built by Waishnav
 

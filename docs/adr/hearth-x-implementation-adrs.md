@@ -151,9 +151,19 @@
 - **Consequences:** الواجهة مكملة لا بديلة — الوكلاء والمهام تُدار من عميل MCP، واللوحة للمراقبة والإعداد. مع tunneled host تبقى محمية بكلمة مرور المالك مثل بوابة OAuth.
 
 ## ADR-030: إعادة التسمية إلى Hearth + التعرض المباشر بلا relay
-- **Status:** accepted (2026-09-07)
+- **Status:** superseded by ADR-031 (2026-09-09)
 - **Decision:**
-  - الاسم الجديد Hearth في كل سطح هوية: ثنائيات `hearth`/`hearth-agentd`، حزمة `@waishnav/hearth`، `~/.hearth`، متغيرات `HEARTH_*`، المنفذ 7176، `hearth.sqlite`، `refs/hearth/`، نطاق OAuth‏ `hearth`. الهدف: تعايش بلا تعارض مع أي تثبيت DevSpace موجود (ثنائي/إعداد/حزمة/منفذ مختلفة).
-  - ترحيل لمرة واحدة من `~/.devspace` (نسخ config+auth بأذونات 0600، الأصل يُحفظ) + إشعار CLI. مفتاح الاختبار `HEARTH_LEGACY_DEVSPACE_DIR`.
+  - الاسم الجديد Hearth في كل سطح هوية: ثنائيات `hearth`/`hearth-agentd`، حزمة النشر، `~/.hearth`، متغيرات `HEARTH_*`، المنفذ 7176، `hearth.sqlite`، `refs/hearth/`، نطاق OAuth‏ `hearth`.
+  - لا يوجد تبنٍّ لإعدادات سابقة: التثبيت الجديد يبدأ من `hearth init`.
   - تعرض مباشر اختياري بلا relay: قسم `tls` (certFile/keyFile/acmeDir)، إنهاء HTTPS داخل `serve`، ومسار `/.well-known/acme-challenge/` لوضع certbot webroot. هوية ثابتة لكل PC (`hearth id`, ملف `machine.json` بوضع 0600) + أمر `hearth expose` التشخيصي الصادق: عنوان عام + حالة TLS + خطوات تالية مخصصة، مع التصريح الصريح بأن URL عام يتطلب مسار inbound ونطاقًا — لا سحر هنا.
-- **Consequences:** منح OAuth القديمة (نطاق devspace) تحتاج إعادة موافقة. روابط schema تشير إلى مستودع `Waishnav/hearth` (إعادة تسمية المستودع على GitHub خطوة يدوية لاحقة). النشر الأول على npm (`install.sh` يعمل من checkout حتى ذلك الحين).
+- **Consequences:** أي منح OAuth صادرة عن نطاقات سابقة تحتاج إعادة موافقة. روابط schema تشير إلى مستودع `Waishnav/hearth` (إعادة تسمية المستودع على GitHub خطوة يدوية لاحقة). النشر الأول على npm (`install.sh` يعمل من checkout حتى ذلك الحين).
+
+## ADR-031: النفق حصريًا عبر ngrok — إسقاط Cloudflare والتعرض المباشر
+- **Status:** accepted (2026-09-09 — supersedes the tunnel/direct-exposure parts of ADR-030)
+- **Decision:**
+  - المسار البعيد الوحيد: نفق ngrok مُدار لكل PC (`hearth ngrok setup` ثم `hearth serve --ngrok`). حُذف كود Cloudflare Tunnels كاملًا (الوحدة، الاختبارات، أوامر CLI، الإشراف) وحُذف التعرض المباشر (أمر `expose`، قسم `tls`، مسار ACME، إنهاء HTTPS).
+  - الإعداد الجديد `tunnel: {provider: none|ngrok, domain}` في `config.jsonc` الحالي؛ الـ authtoken يبقى في إعداد ngrok نفسه ولا يُخزن في Hearth أبدًا.
+  - مصدر الحقيقة للعنوان الحي: الـ agent API المحلي (`127.0.0.1:4040`)، وأي انحراف عن النطاق المحفوظ يفشل `serve` بصوت عالٍ بدل خدمة محلية مظلمة.
+  - اللوحة وصفحة الهبوط مرفوضتان لنطاق النفق (404 حسب Host) ومتاحتان محليًا — بديل الترشيح المساري الذي كان يوفره cloudflared.
+  - الإعدادات السابقة (قسم `tls` أو مفاتيح نفق قديمة) تُرفض بخطأ ترحيل صريح يوجه إلى `hearth ngrok setup` بدل تفريغ مخطط خام.
+- **Consequences:** كسر مقصود لمرة واحدة — لا مسار ترحيل آلي من إعدادات النفق السابقة. النشر الأول أصبح `@sunshinelife83/hearth@1.0.0` ثم `1.1.0`/`1.2.0`.

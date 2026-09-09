@@ -44,8 +44,6 @@ export interface HearthFiles {
   config: HearthConfig;
   auth: HearthAuthConfig;
   migratedLegacyConfig: boolean;
-  /** One-time adopt of a pre-rename ~/.devspace install (config + auth copied, originals kept). */
-  migratedFromDevspace: boolean;
 }
 
 export interface HearthConfigEdit {
@@ -86,7 +84,6 @@ export function loadHearthFiles(env: NodeJS.ProcessEnv = process.env): HearthFil
   const configPath = hearthConfigPath(env);
   const legacyConfigPath = hearthLegacyConfigPath(env);
   const authPath = hearthAuthPath(env);
-  const migratedFromDevspace = migrateFromLegacyDevspaceDir(env, dir);
   const migratedLegacyConfig = !existsSync(configPath) && existsSync(legacyConfigPath)
     ? migrateLegacyConfigFile(legacyConfigPath, configPath, hearthLegacyConfigBackupPath(env))
     : false;
@@ -102,40 +99,7 @@ export function loadHearthFiles(env: NodeJS.ProcessEnv = process.env): HearthFil
     config: configExists ? readJsoncConfig(configPath) : defaultHearthConfig(),
     auth: authExists ? readJsonFile(authPath, hearthAuthConfigSchema) : {},
     migratedLegacyConfig,
-    migratedFromDevspace,
   };
-}
-
-/**
- * One-time adoption of a pre-rename DevSpace install: when the Hearth config
- * dir has neither config nor auth but ~/.devspace does, copy both files over
- * (owner-only permissions) and leave the originals untouched. Explicit
- * HEARTH_CONFIG_DIR opts out of the adoption.
- */
-function migrateFromLegacyDevspaceDir(env: NodeJS.ProcessEnv, dir: string): boolean {
-  if (env.HEARTH_CONFIG_DIR) return false;
-  if (existsSync(join(dir, "config.jsonc")) || existsSync(join(dir, "auth.json"))) return false;
-  // HEARTH_LEGACY_DEVSPACE_DIR is a test hook; production uses ~/.devspace.
-  const legacyDir = env.HEARTH_LEGACY_DEVSPACE_DIR ?? join(homedir(), ".devspace");
-  const legacyConfig = join(legacyDir, "config.jsonc");
-  const legacyAuth = join(legacyDir, "auth.json");
-  if (!existsSync(legacyConfig) && !existsSync(legacyAuth)) return false;
-  try {
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    for (const file of [legacyConfig, legacyAuth]) {
-      if (!existsSync(file)) continue;
-      const dest = join(dir, basename(file));
-      writeFileSync(dest, readFileSync(file));
-      try {
-        chmodSync(dest, 0o600);
-      } catch {
-        // Non-POSIX platforms: best effort.
-      }
-    }
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function writeHearthConfig(

@@ -160,9 +160,6 @@ async function ensureConfigured(): Promise<void> {
   if (files.migratedLegacyConfig) {
     console.log(`Migrated legacy configuration to ${files.configPath}`);
   }
-  if (files.migratedFromDevspace) {
-    console.log(`Adopted your pre-rename DevSpace install into ${files.dir} (originals kept).`);
-  }
   if (files.configExists && files.authExists) return;
   if (process.env.HEARTH_OAUTH_OWNER_TOKEN) return;
 
