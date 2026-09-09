@@ -103,10 +103,12 @@ describe("task runtime (state machine + verification gates)", () => {
     const taskId = created.taskId as string;
     await call("task_plan", { taskId, steps: ["break things"] });
 
-    // Make the gate fail for this run.
+    // Make the gate fail for this run. Use double quotes: cmd.exe does not
+    // treat single quotes as quoting, so `node -e '...'` would evaluate a
+    // string literal and exit 0 on Windows instead of failing.
     const failing = await call("task_verify", {
       taskId,
-      gates: [{ name: "failing", command: "node -e 'process.exit(3)'" }],
+      gates: [{ name: "failing", command: 'node -e "process.exit(3)"' }],
     });
     const failedRecord = asRecord(failing.structuredContent);
     assert.equal(failedRecord.status, "repairing");
@@ -187,7 +189,7 @@ describe("task runtime (state machine + verification gates)", () => {
     for (let round = 1; round <= 6; round += 1) {
       const result = asRecord((await call("task_verify", {
         taskId,
-        gates: [{ name: "failing", command: "node -e 'process.exit(3)'" }],
+        gates: [{ name: "failing", command: 'node -e "process.exit(3)"' }],
       })).structuredContent);
       if (round <= 5) {
         assert.equal(result.status, "repairing", `round ${round} repairs`);
