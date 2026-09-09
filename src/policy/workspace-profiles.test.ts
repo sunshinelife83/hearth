@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -8,6 +8,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { loadConfig } from "../config.js";
 import { buildLocalMcpServer } from "../stdio-server.js";
 import { writeTestHearthConfig } from "../test-support/config.test.js";
+import { rmFixtureDir } from "../test-support/fs.js";
 import { commandListVerdict, resolveExecutionForWorkspace } from "./workspace-profiles.js";
 
 describe("per-workspace security profiles", () => {
@@ -24,6 +25,13 @@ describe("per-workspace security profiles", () => {
     await mkdir(strictRoot, { recursive: true });
     await mkdir(looseRoot, { recursive: true });
     await writeFile(join(looseRoot, "s.txt"), "x\n");
+    // Windows-only probe script (see the sandbox-path test): POSIX keeps the
+    // inline `node -e` probe because under bwrap this /tmp fixture workspace
+    // is masked by a fresh tmpfs, hiding any script file placed here.
+    await writeFile(
+      join(looseRoot, "probe-owner-token.js"),
+      "console.log(typeof process.env.HEARTH_OAUTH_OWNER_TOKEN)\n",
+    );
 
     const env = writeTestHearthConfig(join(root, "config"), {
       server: { host: "127.0.0.1", port: 7176, publicBaseUrl: null },
@@ -62,9 +70,14 @@ describe("per-workspace security profiles", () => {
   });
 
   after(async () => {
-    await client.close();
-    await closeServer();
-    await rm(root, { recursive: true, force: true });
+    // Close in finally so a client close failure cannot leak the server's
+    // SQLite handles into rm (EBUSY on Windows); rm retries with backoff.
+    try {
+      await client.close();
+    } finally {
+      await closeServer();
+    }
+    await rmFixtureDir(root);
   });
 
   const textOf = (result: unknown) => {
@@ -162,11 +175,20 @@ describe("per-workspace security profiles", () => {
       arguments: { path: looseRoot },
     });
     const looseId = ((loose.structuredContent ?? {}) as { workspaceId?: string }).workspaceId!;
+    // File-based probe on Windows: cmd.exe mangles `node -e "..."` quoting
+    // (Node's spawn quotes the whole command for `cmd /d /s /c`, so the
+    // script arrives with literal backslashes and dies with a SyntaxError).
+    // POSIX keeps the inline probe: under bwrap the fixture workspace lives
+    // under /tmp, which the sandbox masks with a fresh tmpfs, so a script
+    // file there would be hidden while an inline script runs fine.
+    const probeCommand = process.platform === "win32"
+      ? "node probe-owner-token.js"
+      : 'node -e "console.log(typeof process.env.HEARTH_OAUTH_OWNER_TOKEN)"';
     const probe = await client.callTool({
       name: "bash",
       arguments: {
         workspaceId: looseId,
-        command: 'node -e "console.log(typeof process.env.HEARTH_OAUTH_OWNER_TOKEN)"',
+        command: probeCommand,
       },
     });
     assert.match(textOf(probe), /undefined/, "owner token must not leak into tool shells");

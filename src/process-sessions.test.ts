@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { HeadTailBuffer, ProcessSessionManager } from "./process-sessions.js";
 
 const smallBuffer = new HeadTailBuffer(100);
@@ -28,19 +31,31 @@ assert.equal(unicodeResult.truncated, true);
 assert.match(unicodeResult.output, /^a🙂/);
 assert.match(unicodeResult.output, /🙂c$/);
 
+// File-based helper scripts instead of `node -e "..."`: cmd.exe mangles
+// inline-quote handling (Node's spawn quotes the whole command for
+// `cmd /d /s /c`, so the script arrives with literal backslashes and dies
+// with a SyntaxError on Windows). Bare `node <file>` has no shell
+// metacharacters and works identically on POSIX and Windows.
+const scriptsDir = await mkdtemp(join(tmpdir(), "hearth-process-session-test-"));
+await writeFile(join(scriptsDir, "foreground.js"), "console.log('foreground');\n");
+await writeFile(join(scriptsDir, "env-probe.js"), "console.log([process.env.NO_COLOR, process.env.TERM, process.env.PAGER, process.env.GIT_PAGER, process.env.GH_PAGER, process.env.CODEX_CI, process.env.HEARTH_WORKSPACE_ID, process.env.HEARTH_WORKSPACE_ROOT].join(','));\n");
+await writeFile(join(scriptsDir, "bg-finished.js"), "setTimeout(() => console.log('finished'), 100);\n");
+await writeFile(join(scriptsDir, "stdin-echo.js"), "process.stdin.once('data', data => { console.log('input:' + data.toString().trim()); process.exit(0); });\n");
+await writeFile(join(scriptsDir, "stdin-delayed.js"), "process.stdin.once('data', data => setTimeout(() => { console.log('default-input:' + data.toString().trim()); process.exit(0); }, 100));\n");
+await writeFile(join(scriptsDir, "tick-echo.js"), "setInterval(() => console.log('tick'), 10); process.stdin.once('data', data => { console.log('input:' + data.toString().trim()); process.exit(0); });\n");
+await writeFile(join(scriptsDir, "tick.js"), "setInterval(() => console.log('tick'), 10);\n");
+await writeFile(join(scriptsDir, "big-output.js"), "console.log('x'.repeat(5000)); setTimeout(() => {}, 100);\n");
+await writeFile(join(scriptsDir, "columns.js"), "setTimeout(() => console.log('columns:' + process.stdout.columns), 250);\n");
+
 const manager = new ProcessSessionManager({
   maxBufferCharacters: 1_024,
   completedSessionTtlMs: 1_000,
 });
 
-const node = process.platform === "win32"
-  ? `"${process.execPath}"`
-  : JSON.stringify(process.execPath);
-
 const foreground = await manager.start({
   workspaceId: "workspace-a",
-  cwd: process.cwd(),
-  command: `${node} -e "console.log('foreground')"`,
+  cwd: scriptsDir,
+  command: "node foreground.js",
   yieldTimeMs: 2_000,
 });
 assert.equal(foreground.running, false);
@@ -51,8 +66,8 @@ assert.equal(foreground.sessionId, undefined);
 const environment = await manager.start({
   workspaceId: "workspace-a",
   workspaceRoot: "/tmp/hearth-workspace-a",
-  cwd: process.cwd(),
-  command: `${node} -e "console.log([process.env.NO_COLOR, process.env.TERM, process.env.PAGER, process.env.GIT_PAGER, process.env.GH_PAGER, process.env.CODEX_CI, process.env.HEARTH_WORKSPACE_ID, process.env.HEARTH_WORKSPACE_ROOT].join(','))"`,
+  cwd: scriptsDir,
+  command: "node env-probe.js",
   yieldTimeMs: 2_000,
 });
 assert.equal(environment.running, false);
@@ -60,8 +75,8 @@ assert.match(environment.output, /1,dumb,cat,cat,cat,1,workspace-a,\/tmp\/hearth
 
 const background = await manager.start({
   workspaceId: "workspace-a",
-  cwd: process.cwd(),
-  command: `${node} -e "setTimeout(() => console.log('finished'), 100)"`,
+  cwd: scriptsDir,
+  command: "node bg-finished.js",
   yieldTimeMs: 5,
 });
 assert.equal(background.running, true);
@@ -88,8 +103,8 @@ assert.match(completed.output, /finished/);
 
 const interactive = await manager.start({
   workspaceId: "workspace-a",
-  cwd: process.cwd(),
-  command: `${node} -e "process.stdin.once('data', data => { console.log('input:' + data.toString().trim()); process.exit(0); })"`,
+  cwd: scriptsDir,
+  command: "node stdin-echo.js",
   yieldTimeMs: 5,
 });
 assert.equal(interactive.running, true);
@@ -107,8 +122,8 @@ assert.match(inputResult.output, /input:hello/);
 
 const defaultInteractive = await manager.start({
   workspaceId: "workspace-a",
-  cwd: process.cwd(),
-  command: `${node} -e "process.stdin.once('data', data => setTimeout(() => { console.log('default-input:' + data.toString().trim()); process.exit(0); }, 100))"`,
+  cwd: scriptsDir,
+  command: "node stdin-delayed.js",
   yieldTimeMs: 5,
 });
 assert.equal(defaultInteractive.running, true);
@@ -129,8 +144,8 @@ assert.match(defaultInputResult.output, /default-input:hello/);
 
 const noisyInteractive = await manager.start({
   workspaceId: "workspace-a",
-  cwd: process.cwd(),
-  command: `${node} -e "setInterval(() => console.log('tick'), 10); process.stdin.once('data', data => { console.log('input:' + data.toString().trim()); process.exit(0); })"`,
+  cwd: scriptsDir,
+  command: "node tick-echo.js",
   yieldTimeMs: 100,
 });
 assert.equal(noisyInteractive.running, true);
@@ -148,8 +163,8 @@ assert.match(noisyInputResult.output, /input:hello/);
 
 const interruptible = await manager.start({
   workspaceId: "workspace-a",
-  cwd: process.cwd(),
-  command: `${node} -e "setInterval(() => console.log('tick'), 10)"`,
+  cwd: scriptsDir,
+  command: "node tick.js",
   yieldTimeMs: 100,
 });
 assert.equal(interruptible.running, true);
@@ -167,8 +182,8 @@ if (process.platform !== "win32") assert.equal(interrupted.signal, "SIGINT");
 
 let buffered = await manager.start({
   workspaceId: "workspace-a",
-  cwd: process.cwd(),
-  command: `${node} -e "console.log('x'.repeat(5000)); setTimeout(() => {}, 100)"`,
+  cwd: scriptsDir,
+  command: "node big-output.js",
   yieldTimeMs: 50,
   maxOutputTokens: 100,
 });
@@ -197,8 +212,8 @@ try {
   } else {
     const pty = await manager.start({
       workspaceId: "workspace-a",
-      cwd: process.cwd(),
-      command: `${node} -e "setTimeout(() => console.log('columns:' + process.stdout.columns), 250)"`,
+      cwd: scriptsDir,
+      command: "node columns.js",
       tty: true,
       columns: 80,
       rows: 24,
@@ -219,4 +234,5 @@ try {
   }
 } finally {
   manager.shutdown();
+  await rm(scriptsDir, { recursive: true, force: true });
 }
