@@ -441,11 +441,22 @@ test("server shutdown waits for an active MCP tool call", async (t) => {
   const workspaceId = openBody.result?.structuredContent?.workspaceId;
   assert.equal(typeof workspaceId, "string");
 
-  const command = [
-    "const fs=require('node:fs')",
-    "fs.writeFileSync('started','')",
-    "const timer=setInterval(()=>{if(fs.existsSync('release')) clearInterval(timer)},10)",
-  ].join(";");
+  // Write a helper script instead of `node -e "..."`: cmd.exe interprets
+  // `>` (as in `=>`) as output redirection and mangles single/double-quote
+  // handling, so the inline script exits immediately on Windows without
+  // creating `started`. A script file has no shell metacharacters and works
+  // identically on POSIX and Windows.
+  await writeFile(
+    join(root, "wait-for-release.mjs"),
+    [
+      "import { existsSync, writeFileSync } from 'node:fs';",
+      "writeFileSync(new URL('started', import.meta.url), '');",
+      "const timer = setInterval(() => {",
+      "  if (existsSync(new URL('release', import.meta.url))) clearInterval(timer);",
+      "}, 10);",
+      "",
+    ].join("\n"),
+  );
   const toolCall = postModernMcp(
     localBaseUrl,
     accessToken,
@@ -454,7 +465,7 @@ test("server shutdown waits for an active MCP tool call", async (t) => {
       name: "exec_command",
       arguments: {
         workspaceId,
-        cmd: `node -e \"${command}\"`,
+        cmd: "node wait-for-release.mjs",
         yieldTimeMs: 30_000,
       },
     },
@@ -512,7 +523,7 @@ async function httpServerFixture(
       httpServer.close((error) => error ? reject(error) : resolve());
     });
     await running.close();
-    await rm(root, { recursive: true, force: true });
+    await rmFixtureDir(root);
   });
 
   const address = httpServer.address();
@@ -621,17 +632,28 @@ async function fixture(
   const close = async () => {
     if (closed) return;
     closed = true;
-    await client.close();
-    await server.close();
-    store.close();
-    // Windows holds OS locks on open SQLite files: the store must close
-    // before t.after removes the fixture dir, or cleanup fails with EPERM.
-    taskStore.close();
+    try {
+      await client.close();
+    } finally {
+      try {
+        await server.close();
+      } finally {
+        // Windows holds OS locks on open SQLite files: every store must close
+        // before t.after removes the fixture dir, or cleanup fails with
+        // EBUSY/EPERM. Close in finally so a client/server close failure
+        // cannot leak a handle into rm.
+        try {
+          store.close();
+        } finally {
+          taskStore.close();
+        }
+      }
+    }
   };
 
   t.after(async () => {
     await close();
-    await rm(root, { recursive: true, force: true });
+    await rmFixtureDir(root);
   });
 
   return { client, project };
@@ -642,15 +664,37 @@ async function git(cwd: string, args: string[]): Promise<void> {
 }
 
 async function waitForFile(path: string): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  // Windows CI runners are slower to spawn node + SQLite + HTTP; allow ~10s
+  // instead of ~1s so the shutdown test does not flake on process startup.
+  for (let attempt = 0; attempt < 200; attempt += 1) {
     try {
       await access(path);
       return;
     } catch {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
   assert.fail(`Timed out waiting for ${path}`);
+}
+
+async function rmFixtureDir(root: string): Promise<void> {
+  // Windows keeps an OS lock on open SQLite files (EBUSY/EPERM/ENOTEMPTY on
+  // rm). All fixture stores are closed before this runs, but the OS can hold
+  // the lock briefly after close, so retry with backoff. POSIX deletes open
+  // files fine, so this is a no-op fast path there.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+  throw lastError;
 }
 
 async function issueTestAccessToken(
