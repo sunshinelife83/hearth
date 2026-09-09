@@ -55,17 +55,28 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
+      - name: Test (tunnel)
+        run: pnpm test:ci-tunnel
+
+      - name: Test (config)
+        run: pnpm test:ci-config
+
+      - name: Test (server)
+        run: pnpm test:ci-server
+
+      - name: Test (cli)
+        run: pnpm test:ci-cli
+
+      - name: Test (state)
+        run: pnpm test:ci-state
+
+      - name: Test (policy)
+        run: pnpm test:ci-policy
+
+      - name: Test (agents)
         env:
           HEARTH_REQUIRE_PI_SANDBOX: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
-        run: |
-          pnpm test:ci-tunnel
-          pnpm test:ci-config
-          pnpm test:ci-server
-          pnpm test:ci-cli
-          pnpm test:ci-state
-          pnpm test:ci-policy
-          pnpm test:ci-agents
+        run: pnpm test:ci-agents
 
       - name: Build
         run: pnpm build
