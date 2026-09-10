@@ -29,6 +29,10 @@ describe("device tokens", () => {
 
   after(async () => {
     provider.close();
+    // The test's own store holds an open better-sqlite3 handle on
+    // state/hearth.sqlite. POSIX unlinks open files fine, but Windows
+    // reports EBUSY, so it must close before the fixture dir is removed.
+    store.close();
     await rm(root, { recursive: true, force: true });
   });
 

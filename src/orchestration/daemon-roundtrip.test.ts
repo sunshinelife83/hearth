@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { loadConfig } from "../config.js";
 import { buildLocalMcpServer } from "../stdio-server.js";
+import { LocalAgentClient } from "../local-agent-client.js";
 import { writeTestHearthConfig } from "../test-support/config.test.js";
 
 /**
@@ -64,7 +65,8 @@ describe("orchestration daemon roundtrip (real IPC, no model)", () => {
     else process.env.HEARTH_OAUTH_OWNER_TOKEN = savedToken;
     if (savedConfigDir === undefined) delete process.env.HEARTH_CONFIG_DIR;
     else process.env.HEARTH_CONFIG_DIR = savedConfigDir;
-    await rm(root, { recursive: true, force: true });
+    await stopFixtureDaemon(join(root, "state"));
+    await rmFixtureDir(root);
   });
 
   it("reaches the manager and returns UNKNOWN_TARGET as a tool error", async () => {
@@ -81,3 +83,44 @@ describe("orchestration daemon roundtrip (real IPC, no model)", () => {
     assert.ok(!/DAEMON_STARTUP_FAILURE|DAEMON_UNAVAILABLE/.test(text), "daemon must boot and answer");
   });
 });
+
+/**
+ * Stop the real daemon this fixture booted. It opens the fixture's
+ * state/hearth.sqlite (LocalAgentStore) and idles after the round trip, and
+ * nothing tracks the detached child — `local.close()` only shuts down the
+ * in-process stores. POSIX unlinks open files fine, but on Windows the
+ * orphan's handle makes the cleanup `rm` fail with EBUSY. Stopping over the
+ * daemon socket (with a client that can never spawn a replacement) releases
+ * the handle deterministically; a missing or already-dead daemon is a no-op.
+ */
+async function stopFixtureDaemon(stateDir: string): Promise<void> {
+  const daemon = new LocalAgentClient({
+    stateDir,
+    spawnDaemon: () => undefined,
+    requestTimeoutMs: 5_000,
+  });
+  await daemon.stop();
+}
+
+/**
+ * Remove the fixture dir, tolerating Windows' transient file-lock release.
+ * All deterministic cleanup (store closes, daemon stop) runs first; this
+ * only absorbs the OS letting go of handles from the just-stopped daemon
+ * (EBUSY/EPERM/ENOTEMPTY), which POSIX never surfaces. Bounded and
+ * code-specific: anything else still throws immediately.
+ */
+async function rmFixtureDir(root: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}

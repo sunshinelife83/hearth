@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { loadConfig } from "./config.js";
 import { buildLocalMcpServer } from "./stdio-server.js";
+import { LocalAgentClient } from "./local-agent-client.js";
 import { writeTestHearthConfig } from "./test-support/config.test.js";
 import { TaskStore } from "./task-store.js";
 import { linkAgentToTask, stallAdvisory } from "./agent-tools.js";
@@ -45,7 +46,8 @@ describe("agent → task ownership linkage", () => {
   after(async () => {
     await client.close();
     await closeServer();
-    await rm(root, { recursive: true, force: true });
+    await stopFixtureDaemon(join(root, "state"));
+    await rmFixtureDir(root);
   });
 
   it("linkAgentToTask records ownership and rejects unknown tasks", () => {    const store = new TaskStore(join(root, "state"));
@@ -147,7 +149,8 @@ describe("delegation scopes and pre-delegation snapshots", () => {
   after(async () => {
     await client.close();
     await closeServer();
-    await rm(root, { recursive: true, force: true });
+    await stopFixtureDaemon(join(root, "state"));
+    await rmFixtureDir(root);
   });
 
   const textOf = (result: unknown) =>
@@ -182,3 +185,46 @@ describe("delegation scopes and pre-delegation snapshots", () => {
     assert.ok(!/snapshot/i.test(textOf(result)), "no snapshot error leaks into the failure");
   });
 });
+
+/**
+ * Stop the hearth-agentd this fixture may have booted. Even a failing
+ * `agent_start` reaches the overlap guard, which calls `agentClient().list()`
+ * and boots a detached, unref'd daemon as a side effect. The daemon opens
+ * this fixture's state/hearth.sqlite (LocalAgentStore) and idles, and nothing
+ * tracks the child — `local.close()` only shuts down the in-process stores.
+ * POSIX unlinks open files fine, but on Windows the orphan's handle makes the
+ * cleanup `rm` fail with EBUSY. Stopping over the daemon socket (with a
+ * client that can never spawn a replacement) releases the handle
+ * deterministically; a missing or already-dead daemon is a no-op success.
+ */
+async function stopFixtureDaemon(stateDir: string): Promise<void> {
+  const daemon = new LocalAgentClient({
+    stateDir,
+    spawnDaemon: () => undefined,
+    requestTimeoutMs: 5_000,
+  });
+  await daemon.stop();
+}
+
+/**
+ * Remove the fixture dir, tolerating Windows' transient file-lock release.
+ * All deterministic cleanup (store closes above, daemon stop) runs first;
+ * this only absorbs the OS letting go of handles from just-exited processes
+ * (EBUSY/EPERM/ENOTEMPTY), which POSIX never surfaces. Bounded and
+ * code-specific: anything else still throws immediately.
+ */
+async function rmFixtureDir(root: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
