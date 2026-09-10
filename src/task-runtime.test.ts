@@ -26,6 +26,12 @@ describe("task runtime (state machine + verification gates)", () => {
       scripts: { test: "node gate.js" },
     }));
     await writeFile(join(workspaceRoot, "gate.js"), "process.exit(Number(process.env.GATE_FAIL ?? 0))");
+    // File-based failing gate: `node -e "..."` relies on shell quoting that
+    // cmd.exe mangles (single quotes are not quoting there; double quotes are
+    // stripped by `cmd /s /c`), so the inline script can exit 0 on Windows
+    // instead of failing. A script file has no shell metacharacters and works
+    // identically on POSIX and Windows (same approach as server.test.ts).
+    await writeFile(join(workspaceRoot, "fail-gate.js"), "process.exit(3)\n");
 
     const env = writeTestHearthConfig(join(root, "config"), {
       server: { host: "127.0.0.1", port: 7176, publicBaseUrl: null },
@@ -47,9 +53,12 @@ describe("task runtime (state machine + verification gates)", () => {
   });
 
   after(async () => {
-    await client.close();
-    await closeServer();
-    await rm(root, { recursive: true, force: true });
+    try {
+      await client.close();
+    } finally {
+      await closeServer();
+    }
+    await rmFixtureDir(root);
   });
 
   async function openWorkspace(): Promise<string> {
@@ -103,12 +112,11 @@ describe("task runtime (state machine + verification gates)", () => {
     const taskId = created.taskId as string;
     await call("task_plan", { taskId, steps: ["break things"] });
 
-    // Make the gate fail for this run. Use double quotes: cmd.exe does not
-    // treat single quotes as quoting, so `node -e '...'` would evaluate a
-    // string literal and exit 0 on Windows instead of failing.
+    // File-based gate (see before hook): avoids `node -e` shell quoting that
+    // cmd.exe mangles on Windows.
     const failing = await call("task_verify", {
       taskId,
-      gates: [{ name: "failing", command: 'node -e "process.exit(3)"' }],
+      gates: [{ name: "failing", command: "node fail-gate.js" }],
     });
     const failedRecord = asRecord(failing.structuredContent);
     assert.equal(failedRecord.status, "repairing");
@@ -189,7 +197,7 @@ describe("task runtime (state machine + verification gates)", () => {
     for (let round = 1; round <= 6; round += 1) {
       const result = asRecord((await call("task_verify", {
         taskId,
-        gates: [{ name: "failing", command: 'node -e "process.exit(3)"' }],
+        gates: [{ name: "failing", command: "node fail-gate.js" }],
       })).structuredContent);
       if (round <= 5) {
         assert.equal(result.status, "repairing", `round ${round} repairs`);
@@ -223,3 +231,23 @@ describe("task runtime (state machine + verification gates)", () => {
     assert.equal(resumed.status, "planning");
   });
 });
+
+async function rmFixtureDir(root: string): Promise<void> {
+  // Windows keeps an OS lock on open SQLite files (EBUSY/EPERM/ENOTEMPTY on
+  // rm). All fixture stores are closed before this runs, but the OS can hold
+  // the lock briefly after close, so retry with backoff. POSIX deletes open
+  // files fine, so this is a no-op fast path there.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}

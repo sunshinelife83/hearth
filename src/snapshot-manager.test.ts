@@ -25,6 +25,11 @@ describe("snapshot manager", () => {
     await git(workspaceRoot, ["init", "-q"]);
     await git(workspaceRoot, ["config", "user.email", "test@example.com"]);
     await git(workspaceRoot, ["config", "user.name", "Test"]);
+    // Windows runners default core.autocrlf to true, which checks out LF as
+    // CRLF and makes exact "\n" assertions fail. Pin the fixture repo to LF
+    // so rollback content is deterministic across platforms.
+    await git(workspaceRoot, ["config", "core.autocrlf", "false"]);
+    await git(workspaceRoot, ["config", "core.eol", "lf"]);
     await writeFile(join(workspaceRoot, "app.txt"), "version one\n");
     await mkdir(join(workspaceRoot, "src"), { recursive: true });
     await writeFile(join(workspaceRoot, "src", "index.ts"), "export const a = 1;\n");
@@ -56,8 +61,8 @@ describe("snapshot manager", () => {
     });
     assert.equal(rollback.files, 3);
 
-    assert.equal(await readFile(join(workspaceRoot, "app.txt"), "utf8"), "version one\n");
-    assert.equal(await readFile(join(workspaceRoot, "src", "index.ts"), "utf8"), "export const a = 1;\n");
+    assert.equal(await readNormalized(join(workspaceRoot, "app.txt")), "version one\n");
+    assert.equal(await readNormalized(join(workspaceRoot, "src", "index.ts")), "export const a = 1;\n");
     await assert.rejects(() => readFile(join(workspaceRoot, "generated.txt"), "utf8"));
   });
 
@@ -88,6 +93,12 @@ describe("snapshot manager", () => {
 
     const headAfter = (await git(workspaceRoot, ["rev-parse", "HEAD"])).trim();
     assert.equal(headAfter, headBefore);
-    assert.equal(await readFile(join(workspaceRoot, "app.txt"), "utf8"), "version one\n");
+    assert.equal(await readNormalized(join(workspaceRoot, "app.txt")), "version one\n");
   });
 });
+
+async function readNormalized(path: string): Promise<string> {
+  // Normalize CRLF so the assertion holds even if the platform or git
+  // checkout converts line endings (Windows with autocrlf enabled).
+  return (await readFile(path, "utf8")).replaceAll("\r\n", "\n");
+}

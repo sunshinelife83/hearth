@@ -43,9 +43,12 @@ describe("agent → task ownership linkage", () => {
   });
 
   after(async () => {
-    await client.close();
-    await closeServer();
-    await rm(root, { recursive: true, force: true });
+    try {
+      await client.close();
+    } finally {
+      await closeServer();
+    }
+    await rmFixtureDir(root);
   });
 
   it("linkAgentToTask records ownership and rejects unknown tasks", () => {    const store = new TaskStore(join(root, "state"));
@@ -145,9 +148,12 @@ describe("delegation scopes and pre-delegation snapshots", () => {
   });
 
   after(async () => {
-    await client.close();
-    await closeServer();
-    await rm(root, { recursive: true, force: true });
+    try {
+      await client.close();
+    } finally {
+      await closeServer();
+    }
+    await rmFixtureDir(root);
   });
 
   const textOf = (result: unknown) =>
@@ -182,3 +188,23 @@ describe("delegation scopes and pre-delegation snapshots", () => {
     assert.ok(!/snapshot/i.test(textOf(result)), "no snapshot error leaks into the failure");
   });
 });
+
+async function rmFixtureDir(root: string): Promise<void> {
+  // Windows keeps an OS lock on open SQLite files (EBUSY/EPERM/ENOTEMPTY on
+  // rm). All fixture stores are closed before this runs, but the OS can hold
+  // the lock briefly after close, so retry with backoff. POSIX deletes open
+  // files fine, so this is a no-op fast path there.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
