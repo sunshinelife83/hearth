@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
 import { describe, it } from "node:test";
 import {
   normalizeScopePaths,
@@ -10,8 +11,10 @@ import {
 describe("delegation scopes", () => {
   it("normalizes against the root and rejects escapes", () => {
     const root = "/repo/proj";
-    assert.deepEqual(normalizeScopePaths(root, undefined), { ok: true, paths: ["/repo/proj"] });
-    assert.deepEqual(normalizeScopePaths(root, ["src", "./src/../src"]), { ok: true, paths: ["/repo/proj/src"] });
+    // `resolve` is platform-dependent: on Windows "/repo/proj" resolves to
+    // "<drive>:\repo\proj", so compute expectations instead of hardcoding POSIX paths.
+    assert.deepEqual(normalizeScopePaths(root, undefined), { ok: true, paths: [resolve(root)] });
+    assert.deepEqual(normalizeScopePaths(root, ["src", "./src/../src"]), { ok: true, paths: [resolve(root, "src")] });
     const escape = normalizeScopePaths(root, ["../other"]);
     assert.equal(escape.ok, false);
     assert.match(escape.ok === false ? escape.error : "", /escapes the workspace/);
