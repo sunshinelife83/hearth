@@ -359,23 +359,42 @@ export class ProcessSessionManager {
   private startPipe(session: ProcessSession, input: StartCommandInput): void {
     const shell = this.resolveShell(input);
     const detached = process.platform !== "win32";
-    // Spawn the resolved (possibly sandbox-wrapped) shell directly. Node's
-    // `shell:` spawn option would append `-c <command>` to whatever executable
-    // it is given, which breaks wrappers like `bwrap` ("Unknown option -c").
-    // resolveShellCommand already embeds the command in shell.args.
-    const child = spawn(shell.executable, shell.args, {
-      cwd: input.cwd,
-      env: processEnvironment(
-        filterChildEnvironment(process.env, this.environment, { workspaceId: input.workspaceId }),
-        {
-          workspaceId: input.workspaceId,
-          workspaceRoot: input.workspaceRoot,
-        },
-      ),
-      stdio: "pipe",
-      windowsHide: true,
-      detached,
-    });
+    const env = processEnvironment(
+      filterChildEnvironment(process.env, this.environment, { workspaceId: input.workspaceId }),
+      {
+        workspaceId: input.workspaceId,
+        workspaceRoot: input.workspaceRoot,
+      },
+    );
+    // On Windows, delegate shell quoting to Node via the `shell` spawn
+    // option. Spawning cmd.exe directly as `spawn(exe, ["/d", "/s", "/c",
+    // command])` exposes cmd's `/s /c` first-and-last-quote stripping, which
+    // mangles quoted executable paths such as
+    // `"C:\...\node.exe" -e "console.log('foreground')"` into
+    // `C:\...\node.exe" -e "console.log('foreground')` (exit code 1).
+    // Node's `shell` handling wraps the command line correctly. Explicit
+    // spawn is only needed for POSIX sandbox wrappers like `bwrap`
+    // ("Unknown option -c" if Node appends `-c`); Windows has no wrapper
+    // (sandbox adapter probes to "none" there), so delegation is safe.
+    // resolveShellCommand already embeds the command in shell.args for the
+    // explicit path.
+    const child =
+      process.platform === "win32"
+        ? spawn(input.command, {
+            cwd: input.cwd,
+            env,
+            stdio: "pipe",
+            windowsHide: true,
+            detached,
+            shell: shell.executable,
+          })
+        : spawn(shell.executable, shell.args, {
+            cwd: input.cwd,
+            env,
+            stdio: "pipe",
+            windowsHide: true,
+            detached,
+          });
 
     session.process = {
       write: (data) => child.stdin.write(data),
