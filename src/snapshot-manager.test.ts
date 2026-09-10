@@ -25,6 +25,13 @@ describe("snapshot manager", () => {
     await git(workspaceRoot, ["init", "-q"]);
     await git(workspaceRoot, ["config", "user.email", "test@example.com"]);
     await git(workspaceRoot, ["config", "user.name", "Test"]);
+    // Windows runners default core.autocrlf to true, so `git apply` (used by
+    // rollback) and checkouts convert LF to CRLF in the working tree. The
+    // snapshot blobs still store LF, but byte-exact readFile assertions then
+    // see "\r\n". Pin the fixture repo to LF so rollback bytes are
+    // deterministic on every platform; POSIX runners already behave this way.
+    await git(workspaceRoot, ["config", "core.autocrlf", "false"]);
+    await git(workspaceRoot, ["config", "core.eol", "lf"]);
     await writeFile(join(workspaceRoot, "app.txt"), "version one\n");
     await mkdir(join(workspaceRoot, "src"), { recursive: true });
     await writeFile(join(workspaceRoot, "src", "index.ts"), "export const a = 1;\n");
